@@ -1,6 +1,8 @@
+from copy import deepcopy
 from tkinter import Canvas, Toplevel, StringVar, Frame, Button, Label
 
 from components.Board import Board
+from storage.BoardLog import BoardLog
 
 BACKGROUND_COLOR = '#228833'
 LIGHT_COLOR = '#DEB887'
@@ -17,6 +19,8 @@ class BoardFrame(Canvas):
     def __init__(self, *args, **kwargs):
         Canvas.__init__(self, *args, **kwargs, background=BACKGROUND_COLOR)
         self.board = Board()
+        self.board_log = BoardLog()
+        self.board_to_log = deepcopy(self.board)
         self.cell_size = 1
         self.x_offset = 1
         self.y_offset = 1
@@ -45,6 +49,8 @@ class BoardFrame(Canvas):
                     return
             else:
                 if self.board.move_piece(self.cell_selected[0], self.cell_selected[1], row, col):
+                    self.board_log.add_entry(self.board_to_log, self.cell_selected[0], self.cell_selected[1], row, col)
+                    self.board_to_log = deepcopy(self.board)
                     self.swap_turn()
                     if self.board.pawn_should_promote(row, col):
                         promotion_piece = self.ask_promotion_piece(color=self.turn)
@@ -137,6 +143,8 @@ class BoardFrame(Canvas):
         self.board = Board()
         self.cell_selected = None
         self.turn = 'white'
+        self.board_log = BoardLog()
+        self.board_to_log = deepcopy(self.board)
         self.draw_board()
 
     def ask_promotion_piece(self, color='white'):
