@@ -1,8 +1,11 @@
+import sys
 from copy import deepcopy
 from tkinter import Canvas, Toplevel, StringVar, Frame, Button, Label
 
 from components.Board import Board
+from components.ChessBot import ChessBot
 from storage.BoardLog import BoardLog
+from storage.DatabaseManager import DatabaseManager
 
 BACKGROUND_COLOR = '#228833'
 LIGHT_COLOR = '#DEB887'
@@ -19,6 +22,15 @@ class BoardFrame(Canvas):
     def __init__(self, *args, **kwargs):
         Canvas.__init__(self, *args, **kwargs, background=BACKGROUND_COLOR)
         self.board = Board()
+        try:
+            print('Connecting to database...')
+            self.db_manager = DatabaseManager(sys.argv[1], sys.argv[2])
+            if not self.db_manager.ping():
+                raise Exception('Unable to connect to database')
+        except Exception as e:
+            print(e)
+            self.db_manager = None
+        self.bot = ChessBot(self.db_manager)
         self.board_log = BoardLog()
         self.board_to_log = deepcopy(self.board)
         self.cell_size = 1
@@ -26,6 +38,8 @@ class BoardFrame(Canvas):
         self.y_offset = 1
         self.icon_size = 1
         self.turn = 'white'
+        self.is_white_bot = False
+        self.is_black_bot = True
         self.cell_selected = None
         self.bind("<Configure>", self.on_resize)
         self.bind("<Button-1>", self.on_left_click)
@@ -34,8 +48,18 @@ class BoardFrame(Canvas):
         self.delete('all')
         self.draw_board()
 
+    def set_bots(self, white=False, black=True):
+        self.is_white_bot = white
+        self.is_black_bot = black
+
+    def is_bot(self, color):
+        return self.is_white_bot if color == 'white' else self.is_black_bot
 
     def on_left_click(self, event):
+        # Do nothing if it is a bot's turn
+        if self.is_bot(self.turn):
+            return
+
         mouse_x = event.x
         mouse_y = event.y
         col = (mouse_x - self.x_offset) // self.cell_size
@@ -51,13 +75,13 @@ class BoardFrame(Canvas):
                 if self.board.move_piece(self.cell_selected[0], self.cell_selected[1], row, col):
                     self.board_log.add_entry(self.board_to_log, self.cell_selected[0], self.cell_selected[1], row, col)
                     self.board_to_log = deepcopy(self.board)
-                    self.swap_turn()
                     if self.board.pawn_should_promote(row, col):
                         promotion_piece = self.ask_promotion_piece(color=self.turn)
                         if promotion_piece is None:
                             promotion_piece = 'q'
                         self.board.promote(row, col, promotion_piece)
                     self.cell_selected = None
+                    self.swap_turn()
                 elif selected_piece != '' and self.board.get_color(selected_piece) == self.turn:
                     self.cell_selected = (row, col)
         else:
@@ -137,6 +161,7 @@ class BoardFrame(Canvas):
                     piece_icon = PIECE_ICONS[piece]
                     self.create_text(center_x, center_y, text=piece_icon, font=(FONT, self.icon_size), fill='black')
         if winner is not None:
+            self.board_log.winner = winner
             self.checkmate_dialog(winner)
 
     def reset(self):
@@ -146,6 +171,7 @@ class BoardFrame(Canvas):
         self.board_log = BoardLog()
         self.board_to_log = deepcopy(self.board)
         self.draw_board()
+        self.bot_move()
 
     def ask_promotion_piece(self, color='white'):
         dialog = Toplevel(self)
@@ -224,3 +250,18 @@ class BoardFrame(Canvas):
 
         dialog.wait_window()
         self.reset()
+
+    def bot_move(self):
+        if self.is_bot(self.turn):
+            bot_move = self.bot.decide_move(self.board, self.turn)
+            if bot_move is None:
+                return
+            if self.board.move_piece(bot_move[0], bot_move[1], bot_move[2], bot_move[3]):
+                self.board_log.add_entry(self.board_to_log, bot_move[0], bot_move[1], bot_move[2], bot_move[3])
+                if self.board.pawn_should_promote(bot_move[2], bot_move[3]):
+                    self.board.promote(bot_move[2], bot_move[3], bot_move[4])
+
+                self.board_to_log = deepcopy(self.board)
+                self.swap_turn()
+                self.draw_board()
+        self.after(1000, self.bot_move)

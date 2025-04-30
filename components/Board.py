@@ -76,7 +76,7 @@ class Board:
 
     # Moves a piece from one square to another
     # Checks for validity by default
-    def move_piece(self, from_row, from_col, to_row, to_col, force=False):
+    def move_piece(self, from_row, from_col, to_row, to_col, promotion_piece=None, force=False):
         piece = self.board[from_row][from_col]
         color = self.get_color(piece)
 
@@ -91,7 +91,6 @@ class Board:
             case 'K' | 'k':
                 self.set_king_loc(color, to_row, to_col)
                 self.set_castling_rights(color, '')
-                self.white_castling_rights = ''
                 # castling
                 if abs(from_col - to_col) > 1:
                     if from_col < to_col:
@@ -113,6 +112,9 @@ class Board:
                     self.move_piece(from_row, from_col, from_row, to_col, force=True)
                     # this move puts pawn into correct spot
                     self.move_piece(from_row, to_col, to_row, to_col, force=True)
+                # promote pawn if legal and arg is passed - for bot use
+                if to_row == 0 or to_row == 7:
+                    self.promote(to_row, to_col, promotion_piece)
 
         # move piece
         self.board[to_row][to_col] = piece
@@ -139,6 +141,8 @@ class Board:
     # returns the color of a piece
     @staticmethod
     def get_color(piece):
+        if piece == '':
+            return ''
         if piece.isupper():
             return 'white'
         else:
@@ -167,15 +171,13 @@ class Board:
 
         # captures
         for i in [-1, 1]:
-            try:
+            if 0 <= col + i <= 7 and 0 <= row + direction <= 7:
                 # has normal capture
                 if self.opposing_player(piece, self.get_piece(row + direction, col + i)):
                     valid_moves.append((row + direction, col + i))
                 # has en passant
                 if col + i == self.double_move_col and row == int(3.5 + direction / 2):
                     valid_moves.append((row + direction, col + i))
-            except IndexError:
-                pass
 
         return valid_moves
 
@@ -208,7 +210,7 @@ class Board:
         valid_moves = []
         for i in [-2, -1, 1, 2]:
             for j in [-2, -1, 1, 2]:
-                if abs(i) + abs(j) == 3:
+                if abs(i) + abs(j) == 3 and 0 <= row + i <= 7 and 0 <= col + j <= 7:
                     try:
                         target_piece = self.get_piece(row + i, col + j)
                         if target_piece == ''\
@@ -380,10 +382,10 @@ class Board:
         return True
 
     # checks if a given move cause check
-    def move_causes_check(self, piece, from_row, from_col, to_row, to_col):
+    def move_causes_check(self, piece, from_row, from_col, to_row, to_col, promotion_piece=None, mate=False):
         test_board = deepcopy(self)
-        test_board.move_piece(from_row, from_col, to_row, to_col, force=True)
-        return test_board.in_check(self.get_color(piece))
+        test_board.move_piece(from_row, from_col, to_row, to_col, promotion_piece, force=True)
+        return test_board.in_check(self.get_color(piece)) if mate == False else test_board.in_checkmate(self.get_color(piece))
 
     # checks if pawn is on final row
     def pawn_should_promote(self, row, col):
@@ -405,3 +407,11 @@ class Board:
                 self.board[row][col] = promotion_piece.upper()
             case _:
                 return
+
+    def get_piece_locations(self, color):
+        locations = []
+        for row in range(8):
+            for col in range(8):
+                if self.get_color(self.get_piece(row, col)) == color:
+                    locations.append((row, col))
+        return locations
