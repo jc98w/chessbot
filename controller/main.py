@@ -16,7 +16,8 @@ if __name__ == '__main__':
 
 
 
-    root = tk.Tk("Chess")
+    root = tk.Tk()
+    root.title("ChessBot")
     root.geometry("500x500")
 
     menubar = tk.Menu(root)
@@ -40,6 +41,7 @@ if __name__ == '__main__':
 
     board = BoardFrame(root)
     board.pack(fill=tk.BOTH, expand=True)
-    board.bot_move()
+
+    root.after(1000, board.bot_move)
 
     root.mainloop()

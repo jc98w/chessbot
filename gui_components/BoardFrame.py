@@ -206,7 +206,7 @@ class BoardFrame(Canvas):
         dialog = Toplevel(self)
         dialog.overrideredirect(True)
         # dialog.transient(self.winfo_toplevel())
-        dialog.grab_set()
+
         # dialog.resizable(False, False)
         dialog.config(bd=2, relief='raised')
 
@@ -241,6 +241,7 @@ class BoardFrame(Canvas):
         y = parent_y + (parent_height // 2) - (dialog_height // 2)
         dialog.geometry(f'+{x}+{y}')
 
+        dialog.after_idle(dialog.grab_set)
         # dialog.protocol("WM_DELETE_WINDOW", lambda: on_select('q'))
         dialog.wait_window()
 
@@ -258,7 +259,6 @@ class BoardFrame(Canvas):
         else:
             dialog = Toplevel(self)
             dialog.overrideredirect(True)
-            dialog.grab_set()
 
             message = f'{winner.capitalize()} wins!' if winner != 'draw' else 'Draw!'
             msg_lbl = Label(dialog, text=message, font=(FONT, int(self.icon_size * 0.75)))
@@ -286,6 +286,9 @@ class BoardFrame(Canvas):
             dialog.geometry(f'+{x}+{y}')
 
             dialog.protocol('WM_DELETE_WINDOW', close)
+
+            dialog.after_idle(dialog.grab_set)
+
             dialog.wait_window()
 
     def bot_move(self):
