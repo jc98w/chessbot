@@ -1,7 +1,9 @@
 import sys
+from copy import deepcopy
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from storage.BoardLog import BoardLog
 
 class DatabaseManager:
     def __init__(self, username, password, host='chesscluster.pnlwyv0.mongodb.net', extension='?retryWrites=true&w=majority&appName=ChessCluster'):
@@ -31,13 +33,15 @@ class DatabaseManager:
             insert = self.collection.insert_many(data) if isinstance(data, list) else self.collection.insert_one(data)
             return insert.acknowledged
         except Exception as e:
+            print('Error in DatabaseManager.create')
             print(e)
             return None
 
     def read(self, data, many=False):
         try:
-            return self.collection.find(data) if many else self.collection.find_one(data)
+            return self.collection.find_one(data) if many == False else self.collection.find(data)
         except Exception as e:
+            print('Error in DatabaseManager.read')
             print(e)
             return None
 
@@ -46,6 +50,7 @@ class DatabaseManager:
             result =  self.collection.update_many(find_data, {'$set': update_data})
             return result.modified_count
         except Exception as e:
+            print('Error in DatabaseManager.update')
             print(e)
             return None
 
@@ -54,10 +59,37 @@ class DatabaseManager:
             result = self.collection.delete_many(data)
             return result.deleted_count
         except Exception as e:
+            print('Error in DatabaseManager.delete')
             print(e)
             return None
+
+    def commit_log(self, board_log, winner):
+        try:
+            inserts = []
+            if board_log is None:
+                raise Exception('Board log is None')
+            data = board_log.prepare_data(winner)
+            for log in data:
+                board_str = log['board']
+                query = self.read({'board': board_str})
+                if query is None:
+                    inserts.append(log)
+                else:
+                    BoardLog.merge_log_into_list(log, [query])
+                    self.update({'board': board_str}, query)
+            if len(inserts) > 0:
+                self.create(inserts)
+            return True
+        except Exception as e:
+            print('Error in DatabaseManager.commit_log')
+            print(e)
+            return False
 
 if __name__ == '__main__':
     db = DatabaseManager(sys.argv[1], sys.argv[2])
     if db.ping():
         print('Successful connection to MongoDB')
+        print(db.read({'board':'bubble'}))
+    else:
+        print('Failed to connect to MongoDB')
+

@@ -30,7 +30,10 @@ class Board:
             return True
         return False
 
-    def set_board(self, board):
+    def get_board_array(self):
+        return self.board
+
+    def set_board_array(self, board):
         self.board = board
 
     def get_piece(self, row, col):
@@ -225,6 +228,7 @@ class Board:
                                 or self.opposing_player(piece, target_piece):
                             valid_moves.append((row + i, col + j))
                     except IndexError:
+                        print('IndexError in valid_knight_move')
                         pass
 
         return valid_moves
@@ -431,6 +435,8 @@ class Board:
         return locations
 
     def is_stalemate(self, color):
+        if self.in_check(color):
+            return False
         piece_loc = self.get_piece_locations(color)
         num_valid_moves = 0
         for loc in piece_loc:
@@ -444,3 +450,50 @@ class Board:
                 if piece != '':
                     num_pieces += 1
         return num_pieces
+
+    # put board in terms of the player rather than by color
+    # i.e. make whichever color is making move capitalized
+    # flip board such that player's king is below and to the left of opponent's king
+    def normalized_board_str(self, color):
+        reference_board = self.get_board_array()
+        normalized_board =  deepcopy(reference_board)
+
+        # swap colors
+        if color == 'black':
+            for row in range(8):
+                for col in range(8):
+                    ref_piece = reference_board[row][col]
+                    if ref_piece == '':
+                        continue
+                    if ref_piece.islower():
+                        normalized_board[row][col] = ref_piece.upper()
+                    else:
+                        normalized_board[row][col] = ref_piece.lower()
+
+        # flip board vertically if the player's king is above the opponent's king
+        if self.king_loc(color)[0] < self.king_loc(self.opposite_color(color))[0]:
+            normalized_board = normalized_board[::-1]
+        # flip board horizontally if player's king is to the right of the opponent's king
+        if self.king_loc(color)[1] > self.king_loc(self.opposite_color(color))[1]:
+            for row in range(8):
+                normalized_board[row] = normalized_board[row][::-1]
+
+        return self.compressed_board_string(normalized_board)
+
+    # compress to a string for storage
+    @staticmethod
+    def compressed_board_string(board_array):
+        comp_board = ''
+
+        empty_space_count = 0
+        for row in board_array:
+            for piece in row:
+                if piece == '':
+                    empty_space_count += 1
+                else:
+                    if empty_space_count > 0:
+                        comp_board += str(empty_space_count)
+                        empty_space_count = 0
+                    comp_board += piece
+
+        return comp_board

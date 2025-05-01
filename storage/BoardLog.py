@@ -18,15 +18,20 @@ class LogEntry:
     def get_move(self):
         return self.move
 
+    def get_color(self):
+        return self.board.get_color(self.board.get_piece(self.move[0], self.move[1]))
+
     def get_board_array(self):
         return self.board.board
 
     # put board in terms of the player rather than by color
     # i.e. make whichever color is making move capitalized
     # flip board such that player's king is below and to the left of opponent's king
-    def normalized_board_array(self, color):
+    def normalized_board_str(self):
         reference_board = self.get_board_array()
         normalized_board =  deepcopy(self.get_board_array())
+
+        color = self.get_color()
 
         # swap colors
         if color == 'black':
@@ -48,11 +53,11 @@ class LogEntry:
             for row in range(8):
                 normalized_board[row] = normalized_board[row][::-1]
 
-        return normalized_board
-
+        return self.compressed_board_string(normalized_board)
 
     # flip move so based on same criteria as board (based off king position)
-    def normalized_move(self, color):
+    def normalized_move(self):
+        color = self.get_color()
         if self.move is None:
             return None
         norm_move = deepcopy(self.move)
@@ -71,11 +76,12 @@ class LogEntry:
         return self.board == other.board and self.move == other.move
 
     # compress to a string for storage
-    def compressed_board_array(self):
+    @staticmethod
+    def compressed_board_string(board_array):
         comp_board = ''
 
         empty_space_count = 0
-        for row in self.get_board_array():
+        for row in board_array:
             for piece in row:
                 if piece == '':
                     empty_space_count += 1
@@ -87,19 +93,17 @@ class LogEntry:
 
         return comp_board
 
-    def compressed_move(self):
+    @staticmethod
+    def compressed_move_str(move):
         move_str = ''
-        for char in self.move:
-            move_str += char
+        for char in move:
+            move_str += str(char)
         return move_str
-
-
 
 class BoardLog:
 
     def __init__(self):
         self.log = []
-        self.winner = None
 
     def add_entry(self, board, from_row, from_col, to_row, to_col, promotion_piece=None):
         self.log.append(LogEntry(board, from_row, from_col, to_row, to_col, promotion_piece))
@@ -114,6 +118,52 @@ class BoardLog:
 
     def get_log(self):
         return self.log
+
+    def prepare_data(self, winner):
+        data = []
+        for entry in self.log:
+            board_str = entry.normalized_board_str()
+            move_str = LogEntry.compressed_move_str(entry.normalized_move())
+
+            color = entry.get_color()
+            win = 1 if color == winner else 0
+            loss = 1 if color == 'black' and winner == 'white' or color == 'white' and winner == 'black' else 0
+            draw = 1 if winner == 'draw' else 0
+
+            new_entry = {'board': board_str, 'moves': [{'id': move_str, 'win': win, 'loss': loss, 'draw': draw}]}
+            self.merge_log_into_list(new_entry, data)
+
+        return data
+
+    # merges two board logs
+    @staticmethod
+    def merge_log_into_list(new_entry, log_list):
+        new_move_data = new_entry['moves'][0]
+        new_entry_board_str = new_entry['board']
+
+        # --- Check if board exists in log ---
+        board_matched = False
+        for logged_board in log_list:
+            if logged_board['board'] == new_entry_board_str:
+                board_matched = True
+                # --- Check if move exists in matched board ---
+                move_matched = False
+                for logged_move in logged_board['moves']:
+                    if logged_move['id'] == new_move_data['id']:
+                        # add result data to matched move records
+                        logged_move['win'] += new_move_data['win']
+                        logged_move['loss'] += new_move_data['loss']
+                        logged_move['draw'] += new_move_data['draw']
+                        move_matched = True
+                        break
+                if not move_matched:
+                    logged_board['moves'].append(new_move_data)
+                break
+
+        if not board_matched:
+            log_list.append(new_entry)
+
+
 
     def is_draw(self, curr_board):
         # False if less than 3 turns
@@ -185,15 +235,15 @@ class BoardLog:
         print()
 
     def print_compressed_array(self, entry=-1):
-        comp_array = self.log[entry].compressed_board_array()
+        comp_array = LogEntry.compressed_board_string(self.log[entry].get_board_array())
         pprint(f'{comp_array}: length: {len(comp_array)}')
 
-    def print_normalized_array(self, entry=-1):
+    def print_normalized_board_str(self, entry=-1):
         log_entry = self.log[entry]
         board = log_entry.get_board()
         move = log_entry.get_move()
         color = board.get_color(board.get_piece(move[0], move[1]))
-        norm_array = self.log[entry].normalized_board_array(color)
+        norm_array = self.log[entry].normalized_board_str()
         pprint(norm_array)
 
     def print_normalized_move(self, entry=-1):
@@ -201,6 +251,6 @@ class BoardLog:
         board = log_entry.get_board()
         move = log_entry.get_move()
         color = board.get_color(board.get_piece(move[0], move[1]))
-        norm_move = self.log[entry].normalized_move(color)
+        norm_move = self.log[entry].normalized_move()
         print(move)
         print(norm_move)

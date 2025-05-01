@@ -8,6 +8,9 @@ def reset_board():
 def toggle_bot():
     board.set_bots(white=is_white_bot.get(), black=is_black_bot.get())
 
+def toggle_auto_restart():
+    board.set_auto_restart(auto_restart.get())
+
 
 if __name__ == '__main__':
 
@@ -19,6 +22,11 @@ if __name__ == '__main__':
     menubar = tk.Menu(root)
     game_menu = tk.Menu(menubar, tearoff=0)
     game_menu.add_command(label="Reset", command=reset_board)
+    auto_restart = tk.BooleanVar()
+    auto_restart.set(False)
+    game_menu.add_checkbutton(label='Autorestart', variable=auto_restart, command=toggle_auto_restart)
+    game_menu.add_separator()
+    game_menu.add_command(label="Exit", command=root.quit)
     menubar.add_cascade(label="Game", menu=game_menu)
     bot_menu = tk.Menu(menubar, tearoff=0)
     is_white_bot = tk.BooleanVar()
