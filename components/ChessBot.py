@@ -34,7 +34,9 @@ class ChessBot:
         if move is None:
             return None
         else:
-            move += (random.choice(['q', 'r', 'b', 'n']),)
+            piece = self.board.get_piece(move[0], move[1])
+            if piece.lower() == 'p' and (move[2] == 0 or move[2] == 7):
+                move += (random.choice(['q', 'r', 'b', 'n']),)
             return move
 
     def search_for_checkmate(self):
@@ -42,7 +44,8 @@ class ChessBot:
         for loc in piece_locations:
             valid_moves = self.board.get_valid_moves(loc[0], loc[1])
             for to_loc in valid_moves:
-                if self.board.move_causes_check(self.board.get_piece(loc[0], loc[1]), loc[0], loc[1], *to_loc, mate=True):
+                attacker_piece = self.board.get_piece(loc[0], loc[1])
+                if self.board.move_delivers_check(attacker_piece, loc[0], loc[1], *to_loc, mate=True):
                     return loc + to_loc
         return None
 
@@ -52,3 +55,4 @@ class ChessBot:
             return None
         move = None
         return move
+

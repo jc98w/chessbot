@@ -66,20 +66,23 @@ class BoardFrame(Canvas):
         row = (mouse_y - self.y_offset) // self.cell_size
         if 0 <= row <= 7 and 0 <= col <= 7:
             selected_piece = self.board.get_piece(row, col)
+
             if self.cell_selected is None:
                 if selected_piece != '' and self.board.get_color(selected_piece) == self.turn:
                     self.cell_selected = (row, col)
                 else:
                     return
             else:
-                if self.board.move_piece(self.cell_selected[0], self.cell_selected[1], row, col):
-                    self.board_log.add_entry(self.board_to_log, self.cell_selected[0], self.cell_selected[1], row, col)
-                    self.board_to_log = deepcopy(self.board)
+                move = (self.cell_selected[0], self.cell_selected[1], row, col)
+                if self.board.move_piece(*move):
                     if self.board.pawn_should_promote(row, col):
                         promotion_piece = self.ask_promotion_piece(color=self.turn)
                         if promotion_piece is None:
                             promotion_piece = 'q'
+                        move += (promotion_piece,)
                         self.board.promote(row, col, promotion_piece)
+                    self.board_log.add_entry(self.board_to_log, *move)
+                    self.board_to_log = deepcopy(self.board)
                     self.cell_selected = None
                     self.swap_turn()
                 elif selected_piece != '' and self.board.get_color(selected_piece) == self.turn:
@@ -112,6 +115,8 @@ class BoardFrame(Canvas):
         label_size = int(self.cell_size * 0.15)
 
         winner = None
+        if self.board_log.is_draw(self.board) or self.board.is_stalemate(self.turn):
+            winner = 'draw'
 
         # Draw board
         for row in range(8):
@@ -162,7 +167,7 @@ class BoardFrame(Canvas):
                     self.create_text(center_x, center_y, text=piece_icon, font=(FONT, self.icon_size), fill='black')
         if winner is not None:
             self.board_log.winner = winner
-            self.checkmate_dialog(winner)
+            self.end_dialog(winner)
 
     def reset(self):
         self.board = Board()
@@ -219,12 +224,12 @@ class BoardFrame(Canvas):
         default_piece = 'Q' if color == 'white' else 'q'
         return result if result != '' else default_piece
 
-    def checkmate_dialog(self, winner):
+    def end_dialog(self, winner):
         dialog = Toplevel(self)
         dialog.overrideredirect(True)
         dialog.grab_set()
 
-        message = f'{winner.capitalize()} wins!'
+        message = f'{winner.capitalize()} wins!' if winner != 'draw' else 'Draw!'
         msg_lbl = Label(dialog, text=message, font=(FONT, int(self.icon_size * 0.75)))
         msg_lbl.pack(pady=10)
 
@@ -256,8 +261,8 @@ class BoardFrame(Canvas):
             bot_move = self.bot.decide_move(self.board, self.turn)
             if bot_move is None:
                 return
-            if self.board.move_piece(bot_move[0], bot_move[1], bot_move[2], bot_move[3]):
-                self.board_log.add_entry(self.board_to_log, bot_move[0], bot_move[1], bot_move[2], bot_move[3])
+            if self.board.move_piece(*bot_move):
+                self.board_log.add_entry(self.board_to_log, *bot_move)
                 if self.board.pawn_should_promote(bot_move[2], bot_move[3]):
                     self.board.promote(bot_move[2], bot_move[3], bot_move[4])
 

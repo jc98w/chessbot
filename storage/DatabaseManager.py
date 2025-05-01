@@ -14,7 +14,7 @@ class DatabaseManager:
 
         self.client = MongoClient(uri, server_api=ServerApi('1'))
         self.db = self.client.chess
-        self.collection = self.db['moves']
+        self.collection = self.db['bot_one_data']
 
     def ping(self):
         try:
@@ -24,21 +24,38 @@ class DatabaseManager:
             print(e)
             return False
 
-    def store_board_log(self, board_log):
-        for log_entry in board_log.get_log():
-            pass
+    def create(self, data):
+        try:
+            if data is None:
+                raise Exception('Data is None')
+            insert = self.collection.insert_many(data) if isinstance(data, list) else self.collection.insert_one(data)
+            return insert.acknowledged
+        except Exception as e:
+            print(e)
+            return None
 
-    def create(self):
-        pass
+    def read(self, data, many=False):
+        try:
+            return self.collection.find(data) if many else self.collection.find_one(data)
+        except Exception as e:
+            print(e)
+            return None
 
-    def read(self):
-        pass
+    def update(self, find_data, update_data):
+        try:
+            result =  self.collection.update_many(find_data, {'$set': update_data})
+            return result.modified_count
+        except Exception as e:
+            print(e)
+            return None
 
-    def update(self):
-        pass
-
-    def delete(self):
-        pass
+    def delete(self, data):
+        try:
+            result = self.collection.delete_many(data)
+            return result.deleted_count
+        except Exception as e:
+            print(e)
+            return None
 
 if __name__ == '__main__':
     db = DatabaseManager(sys.argv[1], sys.argv[2])
