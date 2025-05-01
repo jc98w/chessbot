@@ -24,7 +24,16 @@ class Board:
         # indicates pawn double jump used to determine if en passant is legal
         self.double_move_col = None
 
-    def set_board(self, board):
+    def __eq__(self, other):
+        if self.board == other.board and self.white_castling_rights == other.white_castling_rights and \
+            self.black_castling_rights == other.black_castling_rights and self.double_move_col == other.double_move_col:
+            return True
+        return False
+
+    def get_board_array(self):
+        return self.board
+
+    def set_board_array(self, board):
         self.board = board
 
     def get_piece(self, row, col):
@@ -86,7 +95,6 @@ class Board:
         if not force and (to_row, to_col) not in self.get_valid_moves(from_row, from_col):
             return False
 
-        self.double_move_col = None
         match piece:
             case 'K' | 'k':
                 self.set_king_loc(color, to_row, to_col)
@@ -97,24 +105,27 @@ class Board:
                         self.move_piece(from_row, 7, from_row, 5, force=True)
                     else:
                         self.move_piece(from_row, 0, from_row, 3, force=True)
+                self.double_move_col = None
             case 'r' | 'R':
                 rights = self.get_castling_rights(color)
                 if from_col == 0 and 'q' in rights:
                     self.set_castling_rights(color, rights.replace('q', ''))
                 if from_col == 7 and 'k' in rights:
                     self.set_castling_rights(color, rights.replace('k', ''))
+                self.double_move_col = None
             case 'P' | 'p':
                 if abs(from_row - to_row) == 2:
                     self.double_move_col = from_col
                 # if en passant
                 if abs(from_col - to_col) == 1 and abs(from_row - to_row) == 1 and self.double_move_col == to_col:
-                    # this move captures the intercepted pawn
-                    self.move_piece(from_row, from_col, from_row, to_col, force=True)
-                    # this move puts pawn into correct spot
-                    self.move_piece(from_row, to_col, to_row, to_col, force=True)
+                    self.board[from_row][to_col] = ''
                 # promote pawn if legal and arg is passed - for bot use
                 if to_row == 0 or to_row == 7:
                     self.promote(to_row, to_col, promotion_piece)
+                if abs(from_row - to_row == 1):
+                    self.double_move_col = None
+            case _:
+                self.double_move_col = None
 
         # move piece
         self.board[to_row][to_col] = piece
@@ -217,6 +228,7 @@ class Board:
                                 or self.opposing_player(piece, target_piece):
                             valid_moves.append((row + i, col + j))
                     except IndexError:
+                        print('IndexError in valid_knight_move')
                         pass
 
         return valid_moves
@@ -286,7 +298,7 @@ class Board:
                     if all(not self.is_square_attacked(row, col + i, self.opposite_color(color)) and self.get_piece(row, col + i) == '' for i in [1, 2]):
                         valid_moves.append((row, col + 2))
                 if 'q' in castling_rights:
-                    if all(not self.is_square_attacked(row, col - i, self.opposite_color(color)) and self.get_piece(row, col - i) == '' for i in [1, 2]):
+                    if all(not self.is_square_attacked(row, col - i, self.opposite_color(color)) for i in [1, 2]) and all(self.get_piece(row, col - i) == '' for i in [1, 2, 3]):
                         valid_moves.append((row, col - 2))
 
         return valid_moves
@@ -381,11 +393,17 @@ class Board:
                         test_board = deepcopy(self)
         return True
 
-    # checks if a given move cause check
-    def move_causes_check(self, piece, from_row, from_col, to_row, to_col, promotion_piece=None, mate=False):
+    # checks if a given move cause check on self
+    def move_causes_check(self, piece, from_row, from_col, to_row, to_col, promotion_piece=None):
         test_board = deepcopy(self)
         test_board.move_piece(from_row, from_col, to_row, to_col, promotion_piece, force=True)
-        return test_board.in_check(self.get_color(piece)) if mate == False else test_board.in_checkmate(self.get_color(piece))
+        return test_board.in_check(self.get_color(piece))
+
+    # checks if move delivers check to opponent
+    def move_delivers_check(self, piece, from_row, from_col, to_row, to_col, promotion_piece=None, mate=False):
+        test_board = deepcopy(self)
+        test_board.move_piece(from_row, from_col, to_row, to_col, promotion_piece, force=True)
+        return test_board.in_check(self.opposite_color(piece)) if not mate else test_board.in_checkmate(self.opposite_color(piece))
 
     # checks if pawn is on final row
     def pawn_should_promote(self, row, col):
@@ -415,3 +433,67 @@ class Board:
                 if self.get_color(self.get_piece(row, col)) == color:
                     locations.append((row, col))
         return locations
+
+    def is_stalemate(self, color):
+        if self.in_check(color):
+            return False
+        piece_loc = self.get_piece_locations(color)
+        num_valid_moves = 0
+        for loc in piece_loc:
+            num_valid_moves += len(self.get_valid_moves(*loc))
+        return num_valid_moves == 0
+
+    def get_num_pieces(self):
+        num_pieces = 0
+        for row in self.board:
+            for piece in row:
+                if piece != '':
+                    num_pieces += 1
+        return num_pieces
+
+    # put board in terms of the player rather than by color
+    # i.e. make whichever color is making move capitalized
+    # flip board such that player's king is below and to the left of opponent's king
+    def normalized_board_str(self, color):
+        reference_board = self.get_board_array()
+        normalized_board =  deepcopy(reference_board)
+
+        # swap colors
+        if color == 'black':
+            for row in range(8):
+                for col in range(8):
+                    ref_piece = reference_board[row][col]
+                    if ref_piece == '':
+                        continue
+                    if ref_piece.islower():
+                        normalized_board[row][col] = ref_piece.upper()
+                    else:
+                        normalized_board[row][col] = ref_piece.lower()
+
+        # flip board vertically if the player's king is above the opponent's king
+        if self.king_loc(color)[0] < self.king_loc(self.opposite_color(color))[0]:
+            normalized_board = normalized_board[::-1]
+        # flip board horizontally if player's king is to the right of the opponent's king
+        if self.king_loc(color)[1] > self.king_loc(self.opposite_color(color))[1]:
+            for row in range(8):
+                normalized_board[row] = normalized_board[row][::-1]
+
+        return self.compressed_board_string(normalized_board)
+
+    # compress to a string for storage
+    @staticmethod
+    def compressed_board_string(board_array):
+        comp_board = ''
+
+        empty_space_count = 0
+        for row in board_array:
+            for piece in row:
+                if piece == '':
+                    empty_space_count += 1
+                else:
+                    if empty_space_count > 0:
+                        comp_board += str(empty_space_count)
+                        empty_space_count = 0
+                    comp_board += piece
+
+        return comp_board

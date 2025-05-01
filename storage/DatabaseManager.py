@@ -1,7 +1,9 @@
 import sys
+from copy import deepcopy
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from storage.BoardLog import BoardLog
 
 class DatabaseManager:
     def __init__(self, username, password, host='chesscluster.pnlwyv0.mongodb.net', extension='?retryWrites=true&w=majority&appName=ChessCluster'):
@@ -14,7 +16,7 @@ class DatabaseManager:
 
         self.client = MongoClient(uri, server_api=ServerApi('1'))
         self.db = self.client.chess
-        self.collection = self.db['moves']
+        self.collection = self.db['bot_one_data']
 
     def ping(self):
         try:
@@ -24,23 +26,70 @@ class DatabaseManager:
             print(e)
             return False
 
-    def store_board_log(self, board_log):
-        for log_entry in board_log.get_log():
-            pass
+    def create(self, data):
+        try:
+            if data is None:
+                raise Exception('Data is None')
+            insert = self.collection.insert_many(data) if isinstance(data, list) else self.collection.insert_one(data)
+            return insert.acknowledged
+        except Exception as e:
+            print('Error in DatabaseManager.create')
+            print(e)
+            return None
 
-    def create(self):
-        pass
+    def read(self, data, many=False):
+        try:
+            return self.collection.find_one(data) if many == False else self.collection.find(data)
+        except Exception as e:
+            print('Error in DatabaseManager.read')
+            print(e)
+            return None
 
-    def read(self):
-        pass
+    def update(self, find_data, update_data):
+        try:
+            result =  self.collection.update_many(find_data, {'$set': update_data})
+            return result.modified_count
+        except Exception as e:
+            print('Error in DatabaseManager.update')
+            print(e)
+            return None
 
-    def update(self):
-        pass
+    def delete(self, data):
+        try:
+            result = self.collection.delete_many(data)
+            return result.deleted_count
+        except Exception as e:
+            print('Error in DatabaseManager.delete')
+            print(e)
+            return None
 
-    def delete(self):
-        pass
+    def commit_log(self, board_log, winner):
+        try:
+            inserts = []
+            if board_log is None:
+                raise Exception('Board log is None')
+            data = board_log.prepare_data(winner)
+            for log in data:
+                board_str = log['board']
+                query = self.read({'board': board_str})
+                if query is None:
+                    inserts.append(log)
+                else:
+                    BoardLog.merge_log_into_list(log, [query])
+                    self.update({'board': board_str}, query)
+            if len(inserts) > 0:
+                self.create(inserts)
+            return True
+        except Exception as e:
+            print('Error in DatabaseManager.commit_log')
+            print(e)
+            return False
 
 if __name__ == '__main__':
     db = DatabaseManager(sys.argv[1], sys.argv[2])
     if db.ping():
         print('Successful connection to MongoDB')
+        print(db.read({'board':'bubble'}))
+    else:
+        print('Failed to connect to MongoDB')
+
