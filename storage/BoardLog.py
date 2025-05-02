@@ -133,6 +133,8 @@ class BoardLog:
             new_entry = {'board': board_str, 'moves': [{'id': move_str, 'win': win, 'loss': loss, 'draw': draw}]}
             self.merge_log_into_list(new_entry, data)
 
+        # --- Remove checkmating entry. Has no use in the database because bot can find checkmates by itself
+        data.pop()
         return data
 
     # merges two board logs
