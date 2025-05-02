@@ -140,15 +140,6 @@ class ChessBot:
                             opp_best_odds = opp_win_odds
                     if random.random() > opp_best_odds:
                         move_to_play = list(loc + to_loc)
-                        # --- translate normalized more to actual move ---
-                        # --- if opposing king is above player king, vertically flip move
-                        if self.board.king_loc(self.color)[0] < self.board.king_loc(self.board.opposite_color(self.color))[0]:
-                            move_to_play[0] = 7 - move_to_play[0]
-                            move_to_play[2] = 7 - move_to_play[2]
-                        # --- if opposing king is to the right of player king, horizontally flip move
-                        if self.board.king_loc(self.color)[1] > self.board.king_loc(self.board.opposite_color(self.color))[1]:
-                            move_to_play[1] = 7 - move_to_play[1]
-                            move_to_play[3] = 7 - move_to_play[3]
                         print(f'{self.color} found move {move_to_play}; opponent best found odds of winning {opp_best_odds:.2f}')
                         return move_to_play
                     else:
@@ -158,7 +149,7 @@ class ChessBot:
 
 
     def try_new_move(self, prev_moves):
-        print('{self.color} Trying new move.', end=' ')
+        print(f'{self.color} Trying new move.', end=' ')
         valid_moves = []
         for loc in self.piece_locations:
             loc_moves = self.board.get_valid_moves(*loc)
