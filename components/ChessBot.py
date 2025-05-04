@@ -1,5 +1,6 @@
 import random
 from copy import deepcopy
+from os import device_encoding
 
 from storage.DatabaseManager import DatabaseManager
 
@@ -14,13 +15,21 @@ class ChessBot:
         self.board = board
         self.color = color
         self.piece_locations = self.board.get_piece_locations(self.color)
+        print(f'{self.color} deciding move...')
 
+        move_method = 'checkmate'
         move = self.search_for_checkmate()
         if move is None:
+            move_method = 'db move'
             move = self.pick_best_db_move()
             if move is None:
-                move = self.pick_random_move()
+                move_method = 'weighted random'
+                move = self.pick_weighted_random_move()
+                if move is None:
+                    move_method = 'random'
+                    move = self.pick_random_move()
 
+        print(f'\t{self.color} picked move {move} using {move_method}')
         return move
 
     def pick_random_move(self):
@@ -40,13 +49,60 @@ class ChessBot:
                 move += (random.choice(['q', 'r', 'b', 'n']),)
             return move
 
+    def pick_weighted_random_move(self):
+        print('\tTrying weighted random move')
+        random.shuffle(self.piece_locations)
+        potential_moves = []
+        for loc in self.piece_locations:
+            valid_moves = self.board.get_valid_moves(loc[0], loc[1], add_promotion=True)
+            for to_loc in valid_moves:
+                test_board = deepcopy(self.board)
+                attacker_piece = test_board.get_piece(loc[0], loc[1])
+                target_piece = test_board.get_piece(to_loc[0], to_loc[1])
+
+                # --- premove checks ---
+                is_pawn = attacker_piece.lower() == 'p'
+                under_attack = test_board.is_square_attacked(*loc, test_board.opposite_color(self.color))
+                promotes_pawn = attacker_piece.lower() == 'p' and (to_loc[0] == 0 or to_loc[0] == 7)
+
+                test_board.move_piece(*loc, *to_loc, force=True)
+
+                # --- postmove checks ---
+                delivers_check = test_board.in_check(test_board.opposite_color(self.color))
+                if test_board.is_square_attacked(to_loc[0], to_loc[1], test_board.opposite_color(self.color)):
+                    risk_value = 0.3 if attacker_piece.lower() == 'q' else (0.2 if attacker_piece.lower() == 'r' else
+                                 0.15 if attacker_piece.lower() in ['b', 'n'] else 0.1 if attacker_piece.lower() == 'p' else 0)
+                else:
+                    risk_value = 0
+                capture_value = 0.3 if target_piece.lower() == 'q' else (0.2 if target_piece.lower() == 'r' else
+                                0.15 if target_piece.lower() in ['b', 'n'] else 0.1 if target_piece.lower() == 'p' else 0)
+
+                move_rating = 0.4
+                if is_pawn: move_rating += 0.05
+                if under_attack: move_rating += 0.05
+                if promotes_pawn: move_rating += 0.1
+                if delivers_check: move_rating += 0.2
+                move_rating += capture_value
+                move_rating -= risk_value
+
+                potential_moves.append([*loc, *to_loc, move_rating])
+
+        potential_moves = sorted(potential_moves, key=lambda x: x[-1], reverse=True)
+        for i, move in enumerate(potential_moves):
+            if random.random() < move[-1]:
+                print(f'\tFound move {move}')
+                return move[0:-1]
+            else:
+                print(f'\tRejected move {move}')
+        return None
+
+
     def search_for_checkmate(self):
         for loc in self.piece_locations:
-            valid_moves = self.board.get_valid_moves(loc[0], loc[1])
+            valid_moves = self.board.get_valid_moves(loc[0], loc[1], add_promotion=True)
             for to_loc in valid_moves:
                 attacker_piece = self.board.get_piece(loc[0], loc[1])
                 if self.board.move_delivers_check(attacker_piece, loc[0], loc[1], *to_loc, mate=True):
-                    print(f'{self.color} found checkmate at {loc + to_loc}')
                     return loc + to_loc
         return None
 
@@ -108,7 +164,7 @@ class ChessBot:
             move_to_play[1] = 7 - move_to_play[1]
             move_to_play[3] = 7 - move_to_play[3]
 
-        print(f'{self.color} found move {move_to_play}; winning odds: {move_to_play_odds}')
+        print(f'\t{self.color} found move {move_to_play}; winning odds: {move_to_play_odds:.2f}')
         return move_to_play
 
     # instead of looking for a move that results in a good chance of winning, look for a move that puts opponent
@@ -119,7 +175,7 @@ class ChessBot:
 
         # --- for each of player's pieces ---
         for loc in self.piece_locations:
-            valid_moves = self.board.get_valid_moves(*loc)
+            valid_moves = self.board.get_valid_moves(*loc, add_promotion=True)
             # --- for each of the piece's valid moves ---
             for to_loc in valid_moves:
                 # --- find resulting opponent's position in the db ---
@@ -149,10 +205,10 @@ class ChessBot:
 
 
     def try_new_move(self, prev_moves):
-        print(f'{self.color} Trying new move.', end=' ')
+        print(f'\t{self.color} Trying new move.', end=' ')
         valid_moves = []
         for loc in self.piece_locations:
-            loc_moves = self.board.get_valid_moves(*loc)
+            loc_moves = self.board.get_valid_moves(*loc, add_promotion=True)
             for move in loc_moves:
                 if move not in prev_moves:
                     valid_moves.append(loc + move)

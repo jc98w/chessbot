@@ -42,6 +42,6 @@ if __name__ == '__main__':
     board = BoardFrame(root)
     board.pack(fill=tk.BOTH, expand=True)
 
-    root.after(1000, board.bot_move)
+    root.after(1000, board.trigger_bot_move())
 
     root.mainloop()

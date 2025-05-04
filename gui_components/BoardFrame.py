@@ -1,3 +1,4 @@
+import queue
 import sys
 import threading
 from copy import deepcopy
@@ -35,15 +36,21 @@ class BoardFrame(Canvas):
             print(e)
             self.db_manager = None
         self.bot = ChessBot(self.db_manager)
+        self.bot_move_delay = 1000
+        self.bot_move_queue = queue.Queue()
+        self.bot_thread = None
+        self.is_white_bot = False
+        self.is_black_bot = True
+
         self.board_log = BoardLog()
         self.board_to_log = deepcopy(self.board)
         self.cell_size = 1
         self.x_offset = 1
         self.y_offset = 1
         self.icon_size = 1
+
         self.turn = 'white'
-        self.is_white_bot = False
-        self.is_black_bot = True
+        self.winner = None
         self.is_auto_restart = False
         self.cell_selected = None
         self.bind("<Configure>", self.on_resize)
@@ -56,6 +63,7 @@ class BoardFrame(Canvas):
     def set_bots(self, white=False, black=True):
         self.is_white_bot = white
         self.is_black_bot = black
+        self.trigger_bot_move()
 
     def is_bot(self, color):
         return self.is_white_bot if color == 'white' else self.is_black_bot
@@ -96,6 +104,7 @@ class BoardFrame(Canvas):
             self.cell_selected = None
 
         self.draw_board()
+        self.trigger_bot_move()
 
     def swap_turn(self):
         if self.turn == 'white':
@@ -198,11 +207,12 @@ class BoardFrame(Canvas):
     def reset(self):
         self.board = Board()
         self.cell_selected = None
+        self.winner = None
         self.turn = 'white'
         self.board_log = BoardLog()
         self.board_to_log = deepcopy(self.board)
         self.draw_board()
-        self.bot_move()
+        self.trigger_bot_move()
 
     def ask_promotion_piece(self, color='white'):
         dialog = Toplevel(self)
@@ -293,17 +303,50 @@ class BoardFrame(Canvas):
 
             dialog.wait_window()
 
+    def trigger_bot_move(self):
+        if self.winner is None and self.is_bot(self.turn) and (self.bot_thread is None or not self.bot_thread.is_alive()):
+            board_copy = deepcopy(self.board)
+            self.bot_thread = threading.Thread(target=self._run_bot_decision, args=(board_copy, self.turn, self.bot_move_queue), daemon=False)
+            self.bot_thread.start()
+
+            self.after(self.bot_move_delay, self._check_bot_queue)
+
+    def _run_bot_decision(self, board_instance, color, result_queue):
+            try:
+                bot_move = self.bot.decide_move(board_instance, color)
+                result_queue.put(bot_move)
+            except Exception as e:
+                print(f'Bot thread error: {e}')
+                import traceback
+                traceback.print_exc()
+                result_queue.put(None)
+
+    def _check_bot_queue(self):
+        try:
+            bot_move = self.bot_move_queue.get_nowait()
+            if bot_move is not None:
+                if self.board.move_piece(*bot_move):
+                    self.board_log.add_entry(self.board_to_log, *bot_move)
+                    self.board_to_log = deepcopy(self.board)
+                    self.swap_turn()
+                    self.draw_board()
+                    self.trigger_bot_move()
+                else:
+                    print(f'Bot returned bad move: {bot_move}')
+            else:
+                print(f'Bot returned None')
+        except queue.Empty:
+            if self.bot_thread is not None and self.bot_thread.is_alive():
+                self.after(self.bot_move_delay, self._check_bot_queue)
+
     def bot_move(self):
-        if self.is_bot(self.turn):
+        if self.winner is None and self.is_bot(self.turn):
             bot_move = self.bot.decide_move(self.board, self.turn)
             if bot_move is None:
                 return
             if self.board.move_piece(*bot_move):
                 self.board_log.add_entry(self.board_to_log, *bot_move)
-                if self.board.pawn_should_promote(bot_move[2], bot_move[3]):
-                    self.board.promote(bot_move[2], bot_move[3], bot_move[4])
-
                 self.board_to_log = deepcopy(self.board)
                 self.swap_turn()
                 self.draw_board()
-        self.after(1000, self.bot_move)
+                self.trigger_bot_move()

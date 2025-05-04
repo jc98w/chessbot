@@ -58,11 +58,11 @@ class Board:
             self.black_castling_rights = state
 
     # Returns list of valid moves for a given piece
-    def get_valid_moves(self, row, col):
+    def get_valid_moves(self, row, col, add_promotion=False):
         piece = self.board[row][col]
         match piece:
             case 'P' | 'p':
-                pseudo_valid_moves = self.valid_pawn_move(piece, row, col)
+                pseudo_valid_moves = self.valid_pawn_move(piece, row, col, add_promotion)
             case 'R' | 'r':
                 pseudo_valid_moves = self.valid_rook_move(piece, row, col)
             case 'N' | 'n':
@@ -78,7 +78,7 @@ class Board:
 
         valid_moves = []
         for move in pseudo_valid_moves:
-            if not self.move_causes_check(piece, row, col, move[0], move[1]):
+            if not self.move_causes_check(piece, row, col, *move):
                 valid_moves.append(move)
 
         return valid_moves
@@ -119,9 +119,6 @@ class Board:
                 # if en passant
                 if abs(from_col - to_col) == 1 and abs(from_row - to_row) == 1 and self.double_move_col == to_col:
                     self.board[from_row][to_col] = ''
-                # promote pawn if legal and arg is passed - for bot use
-                if to_row == 0 or to_row == 7:
-                    self.promote(to_row, to_col, promotion_piece)
                 if abs(from_row - to_row == 1):
                     self.double_move_col = None
             case _:
@@ -130,6 +127,8 @@ class Board:
         # move piece
         self.board[to_row][to_col] = piece
         self.board[from_row][from_col] = ''
+        if promotion_piece is not None and (to_row == 0 or to_row == 7):
+            self.promote(to_row, to_col, promotion_piece)
         return True
 
     # returns the direction for pawns
@@ -168,27 +167,34 @@ class Board:
             return 'white'
 
     # returns list of valid pawn moves
-    def valid_pawn_move(self, piece, row, col):
-        valid_moves = []
+    def valid_pawn_move(self, piece, row, col, add_promotion):
+        pre_promotion_valid_moves = []
         direction = self.get_direction(piece)
 
         # straight ahead moves
-        if (direction == row or direction == -1 and row == 6) \
+        if (row == 1 and direction == 1 or direction == -1 and row == 6) \
             and self.get_piece(row + direction, col) == ''\
             and self.get_piece(row + 2 * direction, col) == '':
-            valid_moves.append((row + 2 * direction, col))
+            pre_promotion_valid_moves.append((row + 2 * direction, col))
         if 0 <= row + direction <= 7 and self.get_piece(row + direction, col) == '':
-            valid_moves.append((row + direction, col))
+            pre_promotion_valid_moves.append((row + direction, col))
 
         # captures
         for i in [-1, 1]:
             if 0 <= col + i <= 7 and 0 <= row + direction <= 7:
                 # has normal capture
                 if self.opposing_player(piece, self.get_piece(row + direction, col + i)):
-                    valid_moves.append((row + direction, col + i))
+                    pre_promotion_valid_moves.append((row + direction, col + i))
                 # has en passant
                 if col + i == self.double_move_col and row == int(3.5 + direction / 2):
-                    valid_moves.append((row + direction, col + i))
+                    pre_promotion_valid_moves.append((row + direction, col + i))
+        valid_moves = []
+        if add_promotion and (row + direction == 0 or row + direction == 7):
+            for move in pre_promotion_valid_moves:
+                for promotion_piece in ['q', 'r', 'b', 'n']:
+                    valid_moves.append(move + (promotion_piece,))
+        else:
+            valid_moves = pre_promotion_valid_moves
 
         return valid_moves
 
