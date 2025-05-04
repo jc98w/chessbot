@@ -1,8 +1,6 @@
 import random
-from copy import deepcopy
-from os import device_encoding
+from copy import deepcopy, copy
 
-from storage.DatabaseManager import DatabaseManager
 
 class ChessBot:
     def __init__(self, db_manager):
@@ -35,40 +33,42 @@ class ChessBot:
     def pick_random_move(self):
         random.shuffle(self.piece_locations)
         move = None
+        valid_moves = []
         for loc in self.piece_locations:
-            valid_moves = self.board.get_valid_moves(loc[0], loc[1])
-            if len(valid_moves) > 0:
-                move = loc + random.choice(valid_moves)
-                break
-        # print(f'picking move: {move}')
+            piece_valid_moves = self.board.get_valid_moves(loc[0], loc[1], add_promotion=True)
+            if len(piece_valid_moves) > 0:
+                for move in piece_valid_moves:
+                    if move not in valid_moves:
+                        valid_moves.append([*loc, *move])
+
+        if len(valid_moves) > 0:
+            move = random.choice(valid_moves)
+
         if move is None:
             return None
         else:
-            piece = self.board.get_piece(move[0], move[1])
-            if piece.lower() == 'p' and (move[2] == 0 or move[2] == 7):
-                move += (random.choice(['q', 'r', 'b', 'n']),)
             return move
 
     def pick_weighted_random_move(self):
         print('\tTrying weighted random move')
         random.shuffle(self.piece_locations)
         potential_moves = []
+        test_board = deepcopy(self.board)
         for loc in self.piece_locations:
             valid_moves = self.board.get_valid_moves(loc[0], loc[1], add_promotion=True)
             for to_loc in valid_moves:
-                test_board = deepcopy(self.board)
-                attacker_piece = test_board.get_piece(loc[0], loc[1])
-                target_piece = test_board.get_piece(to_loc[0], to_loc[1])
+                attacker_piece = self.board.get_piece(loc[0], loc[1])
+                target_piece = self.board.get_piece(to_loc[0], to_loc[1])
 
                 # --- premove checks ---
                 is_pawn = attacker_piece.lower() == 'p'
-                under_attack = test_board.is_square_attacked(*loc, test_board.opposite_color(self.color))
+                under_attack = self.board.is_square_attacked(*loc, self.board.opposite_color(self.color))
                 promotes_pawn = attacker_piece.lower() == 'p' and (to_loc[0] == 0 or to_loc[0] == 7)
 
                 test_board.move_piece(*loc, *to_loc, force=True)
 
                 # --- postmove checks ---
-                delivers_check = test_board.in_check(test_board.opposite_color(self.color))
+                delivers_check = test_board.in_check(self.board.opposite_color(self.color))
                 if test_board.is_square_attacked(to_loc[0], to_loc[1], test_board.opposite_color(self.color)):
                     risk_value = 0.3 if attacker_piece.lower() == 'q' else (0.2 if attacker_piece.lower() == 'r' else
                                  0.15 if attacker_piece.lower() in ['b', 'n'] else 0.1 if attacker_piece.lower() == 'p' else 0)
@@ -86,6 +86,13 @@ class ChessBot:
                 move_rating -= risk_value
 
                 potential_moves.append([*loc, *to_loc, move_rating])
+
+                # --- undo move on test_board ---
+                test_board.board[loc[0]] = copy(self.board.board[loc[0]])
+                test_board.board[to_loc[0]] = copy(self.board.board[to_loc[0]])
+                test_board.white_castling_rights, test_board.black_castling_rights = self.board.white_castling_rights, self.board.black_castling_rights
+                test_board.white_king_loc, test_board.black_king_loc = self.board.white_king_loc, self.board.black_king_loc
+                test_board.double_move_col = self.board.double_move_col
 
         potential_moves = sorted(potential_moves, key=lambda x: x[-1], reverse=True)
         for i, move in enumerate(potential_moves):
@@ -113,6 +120,7 @@ class ChessBot:
         move_to_play_str = None
         matching_board = self.db_manager.read({'board':self.board.normalized_board_str(self.color)})
         if matching_board is None:
+            print(f'\tNo db move found for {self.color}')
             return None
         else:
             moves_seen_ratings = []
@@ -173,33 +181,42 @@ class ChessBot:
         if self.db_manager is None:
             return None
 
+        test_board = deepcopy(self.board)
         # --- for each of player's pieces ---
         for loc in self.piece_locations:
             valid_moves = self.board.get_valid_moves(*loc, add_promotion=True)
             # --- for each of the piece's valid moves ---
             for to_loc in valid_moves:
-                # --- find resulting opponent's position in the db ---
-                test_board = deepcopy(self.board)
+                # --- sim move and get board query ---
                 test_board.move_piece(*loc, *to_loc)
                 test_board_str = test_board.normalized_board_str(self.board.opposite_color(self.color))
                 opp_board = self.db_manager.read({'board':test_board_str})
+
+                # --- reset the board for next move ---
+                # whole affected rows are reset - this mostly prevents ghosting pawns in case of an en passant
+                test_board.board[loc[0]] = copy(self.board.board[loc[0]])
+                test_board.board[to_loc[0]] = copy(self.board.board[to_loc[0]])
+                test_board.white_castling_rights, test_board.black_castling_rights = self.board.white_castling_rights, self.board.black_castling_rights
+                test_board.white_king_loc, test_board.black_king_loc = self.board.white_king_loc, self.board.black_king_loc
+                test_board.double_move_col = self.board.double_move_col
+
                 # --- if the board wasn't in the db, consider it 50-50 ---
                 if opp_board is None:
                     continue
                 else:
-                    # --- Find opponent's best odds of winning from the resulting position ---
-                    opp_best_odds = -1
+                    # --- Find opponent's lowest odd of losing from the resulting position ---
+                    opp_best_odds = 1
                     for opp_move in opp_board['moves']:
                         times_played = opp_move['win'] + opp_move['draw'] + opp_move['loss']
-                        opp_win_odds = opp_move['win'] / times_played
-                        if opp_win_odds > opp_best_odds:
-                            opp_best_odds = opp_win_odds
-                    if random.random() > opp_best_odds:
+                        opp_loss_odds = opp_move['loss'] / times_played
+                        if opp_loss_odds < opp_best_odds:
+                            opp_best_odds = opp_loss_odds
+                    if random.random() < opp_best_odds:
                         move_to_play = list(loc + to_loc)
-                        print(f'{self.color} found move {move_to_play}; opponent best found odds of winning {opp_best_odds:.2f}')
+                        print(f'{self.color} found move {move_to_play}; opponent odds of losing given best response {opp_best_odds:.2f}')
                         return move_to_play
                     else:
-                        print(f'\t{self.color} rejected move {loc + to_loc}; opponent best found odds of winning {opp_best_odds:.2f}')
+                        print(f'\t{self.color} rejected move {loc + to_loc}; opponent odds of losing given best response {opp_best_odds:.2f}')
 
         return None
 

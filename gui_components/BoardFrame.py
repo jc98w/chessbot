@@ -333,20 +333,10 @@ class BoardFrame(Canvas):
                     self.trigger_bot_move()
                 else:
                     print(f'Bot returned bad move: {bot_move}')
+                    self.trigger_bot_move()
             else:
                 print(f'Bot returned None')
         except queue.Empty:
             if self.bot_thread is not None and self.bot_thread.is_alive():
                 self.after(self.bot_move_delay, self._check_bot_queue)
 
-    def bot_move(self):
-        if self.winner is None and self.is_bot(self.turn):
-            bot_move = self.bot.decide_move(self.board, self.turn)
-            if bot_move is None:
-                return
-            if self.board.move_piece(*bot_move):
-                self.board_log.add_entry(self.board_to_log, *bot_move)
-                self.board_to_log = deepcopy(self.board)
-                self.swap_turn()
-                self.draw_board()
-                self.trigger_bot_move()
