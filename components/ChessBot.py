@@ -203,7 +203,6 @@ class ChessBot:
 
         return None
 
-
     def try_new_move(self, prev_moves):
         print(f'\t{self.color} Trying new move.', end=' ')
         valid_moves = []

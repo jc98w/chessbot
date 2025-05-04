@@ -28,32 +28,8 @@ class LogEntry:
     # i.e. make whichever color is making move capitalized
     # flip board such that player's king is below and to the left of opponent's king
     def normalized_board_str(self):
-        reference_board = self.get_board_array()
-        normalized_board =  deepcopy(self.get_board_array())
-
         color = self.get_color()
-
-        # swap colors
-        if color == 'black':
-            for row in range(8):
-                for col in range(8):
-                    ref_piece = reference_board[row][col]
-                    if ref_piece == '':
-                        continue
-                    if ref_piece.islower():
-                        normalized_board[row][col] = ref_piece.upper()
-                    else:
-                        normalized_board[row][col] = ref_piece.lower()
-
-        # flip board vertically if the player's king is above the opponent's king
-        if self.board.king_loc(color)[0] < self.board.king_loc(self.board.opposite_color(color))[0]:
-            normalized_board = normalized_board[::-1]
-        # flip board horizontally if player's king is to the right of the opponent's king
-        if self.board.king_loc(color)[1] > self.board.king_loc(self.board.opposite_color(color))[1]:
-            for row in range(8):
-                normalized_board[row] = normalized_board[row][::-1]
-
-        return self.compressed_board_string(normalized_board)
+        return self.board.normalized_board_str(color)
 
     # flip move so based on same criteria as board (based off king position)
     def normalized_move(self):
@@ -109,7 +85,7 @@ class BoardLog:
         self.log.append(LogEntry(board, from_row, from_col, to_row, to_col, promotion_piece))
         # self.print_entry()
         # self.print_compressed_array()
-        # self.print_normalized_array()
+        self.print_normalized_board_str()
         # self.print_normalized_move()
 
     # remove last entry. Useful for undoing moves

@@ -378,6 +378,8 @@ class Board:
 
     def in_checkmate(self, king_color):
         #return False
+        if not self.in_check(king_color):
+            return False
         if king_color == 'white':
             king_row, king_col = self.white_king_loc
         elif king_color == 'black':
@@ -484,7 +486,8 @@ class Board:
             for row in range(8):
                 normalized_board[row] = normalized_board[row][::-1]
 
-        return self.compressed_board_string(normalized_board)
+        castling_rights = self.get_castling_rights(color).upper() + self.get_castling_rights(self.opposite_color(color))
+        return self.compressed_board_string(normalized_board) + castling_rights
 
     # compress to a string for storage
     @staticmethod
