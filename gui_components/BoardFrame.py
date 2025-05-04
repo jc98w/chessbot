@@ -26,11 +26,13 @@ class BoardFrame(Canvas):
         Canvas.__init__(self, *args, **kwargs, background=BACKGROUND_COLOR)
         self.board = Board()
         try:
-            print('Connecting to database...')
+            print('Connecting to database...', end='')
             if len(sys.argv) < 2:
                 raise Exception('Database credentials not provided')
             self.db_manager = DatabaseManager(sys.argv[1], sys.argv[2])
-            if not self.db_manager.ping():
+            if self.db_manager.ping():
+                print('Connection successful')
+            else:
                 raise Exception('Unable to connect to database')
         except Exception as e:
             print(e)
