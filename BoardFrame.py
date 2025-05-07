@@ -5,10 +5,10 @@ from copy import deepcopy
 from pprint import pprint
 from tkinter import Canvas, Toplevel, StringVar, Frame, Button, Label
 
-from components.Board import Board
-from components.ChessBot import ChessBot
-from storage.BoardLog import BoardLog
-from storage.DatabaseManager import DatabaseManager
+from Board import Board
+from ChessBot import ChessBot
+from BoardLog import BoardLog
+from DatabaseManager import DatabaseManager
 
 BACKGROUND_COLOR = '#228833'
 LIGHT_COLOR = '#DEB887'
