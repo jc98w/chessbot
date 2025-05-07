@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from storage.BoardLog import BoardLog
+from BoardLog import BoardLog
 
 class DatabaseManager:
     def __init__(self, username, password, host='chesscluster.pnlwyv0.mongodb.net', extension='?retryWrites=true&w=majority&appName=ChessCluster'):
