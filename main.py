@@ -1,6 +1,6 @@
 import tkinter as tk
 
-from gui_components.BoardFrame import BoardFrame
+from BoardFrame import BoardFrame
 
 def reset_board():
     board.reset()
