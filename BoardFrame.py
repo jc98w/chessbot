@@ -31,7 +31,7 @@ class BoardFrame(Canvas):
                 raise Exception('Database credentials not provided')
             self.db_manager = DatabaseManager(sys.argv[1], sys.argv[2])
             if self.db_manager.ping():
-                print('Connection successful')
+                Label(self.master, text='DB connection successful').pack()
             else:
                 raise Exception('Unable to connect to database')
         except Exception as e:
@@ -127,8 +127,8 @@ class BoardFrame(Canvas):
         self.x_offset = BORDER_WIDTH if width < height or size < MIN_SIZE else BORDER_WIDTH + (width - height) // 2
         self.y_offset = BORDER_WIDTH
         self.cell_size = size // 8
-        self.icon_size = int(self.cell_size * 0.7)
-        label_size = int(self.cell_size * 0.15)
+        self.icon_size = int(self.cell_size * 0.07)
+        label_size = int(self.cell_size * 0.015)
 
         winner = None
         if self.board_log.is_draw(self.board) or self.board.is_stalemate(self.turn):
