@@ -80,6 +80,7 @@ class BoardLog:
             self.positions_seen[board_str] += 1
             if self.positions_seen[board_str] == 3:
                 self.is_draw = True
+                print('Draw: Threefold repetition')
         else:
             self.positions_seen[board_str] = 1
 
@@ -90,6 +91,7 @@ class BoardLog:
             self.fifty_move_counter += 1
             if self.fifty_move_counter == 100:
                 self.is_draw = True
+                print('Draw: Fifty move rule')
         print(f'Fifty move counter: {self.fifty_move_counter}')
 
         # checks for sufficient material
@@ -103,9 +105,11 @@ class BoardLog:
         if len(white_pieces) <= 2 and all(i not in white_pieces for i in ['Q', 'R', 'P']) \
                 and len(black_pieces) <= 2 and all(i not in black_pieces for i in ['q', 'r', 'p']):
             self.is_draw = True
+            print('Draw: Insufficient material')
         if (white_pieces == ['K'] and black_pieces == ['k', 'n', 'n']) \
             or (white_pieces == ['K', 'N', 'N'] and black_pieces == ['k']):
             self.is_draw = True
+            print('Draw: Insufficient material')
 
         # self.print_entry()
         # self.print_compressed_array()
