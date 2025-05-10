@@ -13,9 +13,6 @@ def toggle_auto_restart():
 
 
 if __name__ == '__main__':
-
-
-
     root = tk.Tk()
     root.title("ChessBot")
     root.geometry("500x500")

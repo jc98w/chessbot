@@ -8,7 +8,10 @@ NORMAL = '\033[0m'
 class LogEntry:
     def __init__(self, board, from_row, from_col, to_row, to_col, promotion_piece=None):
         self.board = board
+        self.board_str = board.create_board_str()
         self.move = [from_row, from_col, to_row, to_col]
+        self.piece = board.get_piece(from_row, from_col)
+        self.target = board.get_piece(to_row, to_col)
         if promotion_piece:
             self.move = self.move + [promotion_piece]
 
@@ -51,24 +54,6 @@ class LogEntry:
     def __eq__(self, other):
         return self.board == other.board and self.move == other.move
 
-    # compress to a string for storage
-    @staticmethod
-    def compressed_board_string(board_array):
-        comp_board = ''
-
-        empty_space_count = 0
-        for row in board_array:
-            for piece in row:
-                if piece == '':
-                    empty_space_count += 1
-                else:
-                    if empty_space_count > 0:
-                        comp_board += str(empty_space_count)
-                        empty_space_count = 0
-                    comp_board += piece
-
-        return comp_board
-
     @staticmethod
     def compressed_move_str(move):
         move_str = ''
@@ -76,19 +61,58 @@ class LogEntry:
             move_str += str(char)
         return move_str
 
+# ------------------------------------------- BoardLog ----------------------
 class BoardLog:
 
     def __init__(self):
         self.log = []
+        self.positions_seen = {}
+        self.is_draw = False
+        self.fifty_move_counter = 0
 
     def add_entry(self, board, from_row, from_col, to_row, to_col, promotion_piece=None):
-        self.log.append(LogEntry(board, from_row, from_col, to_row, to_col, promotion_piece))
+        new_entry = LogEntry(board, from_row, from_col, to_row, to_col, promotion_piece)
+        self.log.append(new_entry)
+        board_str = new_entry.board_str
+
+        # tracks threefold repetition
+        if board_str in self.positions_seen:
+            self.positions_seen[board_str] += 1
+            if self.positions_seen[board_str] == 3:
+                self.is_draw = True
+        else:
+            self.positions_seen[board_str] = 1
+
+        # tracks 50 move rule
+        if new_entry.piece.lower() == 'p' or new_entry.target != '':
+            self.fifty_move_counter = 0
+        else:
+            self.fifty_move_counter += 1
+            if self.fifty_move_counter == 100:
+                self.is_draw = True
+        print(f'Fifty move counter: {self.fifty_move_counter}')
+
+        # checks for sufficient material
+        white_pieces = []
+        black_pieces = []
+        for char in new_entry.board_str:
+            if char.isupper():
+                white_pieces.append(char)
+            if char.islower():
+                black_pieces.append(char)
+        if len(white_pieces) <= 2 and all(i not in white_pieces for i in ['Q', 'R', 'P']) \
+                and len(black_pieces) <= 2 and all(i not in black_pieces for i in ['q', 'r', 'p']):
+            self.is_draw = True
+        if (white_pieces == ['K'] and black_pieces == ['k', 'n', 'n']) \
+            or (white_pieces == ['K', 'N', 'N'] and black_pieces == ['k']):
+            self.is_draw = True
+
         # self.print_entry()
         # self.print_compressed_array()
         self.print_normalized_board_str()
         # self.print_normalized_move()
 
-    # remove last entry. Useful for undoing moves
+    # remove last entry
     def pop_entry(self):
         self.log.pop()
 
@@ -141,55 +165,8 @@ class BoardLog:
         if not board_matched:
             log_list.append(new_entry)
 
-
-
-    def is_draw(self, curr_board):
-        # False if less than 3 turns
-        if len(self.log) < 7:
-            return False
-
-        # Threefold repetition
-        match_count = 0
-        for log_entry in self.log:
-            if curr_board == log_entry.get_board():
-                match_count += 1
-        if match_count >= 2:
-            return True
-
-        # 50 move rule
-        if len(self.log) >= 100:
-            boring_move_count = 0
-            for i, log_entry in enumerate(reversed(self.log)):
-                board = log_entry.get_board()
-                move = log_entry.get_move()
-                moved_piece = board.get_piece(move[0], move[1])
-                target_piece = board.get_piece(move[2], move[3])
-                if moved_piece.lower() == 'p' or target_piece != '':
-                    break
-                boring_move_count += 1
-            if boring_move_count >= 100:
-                return True
-
-        # Insufficient material
-        white_pieces = []
-        black_pieces = []
-        for row in curr_board.board:
-            for piece in row:
-                if piece == '':
-                    continue
-                if piece.isupper():
-                    white_pieces.append(piece)
-                else:
-                    black_pieces.append(piece)
-        #
-        if len(white_pieces) <= 2 and all(i not in white_pieces for i in ['Q', 'R', 'P']) \
-                and len(black_pieces) <= 2 and all(i not in black_pieces for i in ['q', 'r', 'p']):
-            return True
-        if (white_pieces == ['K'] and black_pieces == ['k', 'n', 'n']) \
-            or (white_pieces == ['K', 'N', 'N'] and black_pieces == ['k']):
-            return True
-
-        return False
+    def get_draw_status(self):
+        return self.is_draw
 
     # prints board to console. Debug tool only. Will look "delayed" compared to live game because
     # one log entry stores the board state and what move was made from there and not
@@ -212,23 +189,13 @@ class BoardLog:
             print()
         print()
 
-    def print_compressed_array(self, entry=-1):
-        comp_array = LogEntry.compressed_board_string(self.log[entry].get_board_array())
-        pprint(f'{comp_array}: length: {len(comp_array)}')
-
     def print_normalized_board_str(self, entry=-1):
-        log_entry = self.log[entry]
-        board = log_entry.get_board()
-        move = log_entry.get_move()
-        color = board.get_color(board.get_piece(move[0], move[1]))
         norm_array = self.log[entry].normalized_board_str()
         pprint(norm_array)
 
     def print_normalized_move(self, entry=-1):
         log_entry = self.log[entry]
-        board = log_entry.get_board()
         move = log_entry.get_move()
-        color = board.get_color(board.get_piece(move[0], move[1]))
         norm_move = self.log[entry].normalized_move()
         print(move)
         print(norm_move)

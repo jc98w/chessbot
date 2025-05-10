@@ -131,7 +131,7 @@ class BoardFrame(Canvas):
         label_size = int(self.cell_size * 0.15)
 
         winner = None
-        if self.board_log.is_draw(self.board) or self.board.is_stalemate(self.turn):
+        if self.board_log.get_draw_status() or self.board.is_stalemate(self.turn):
             winner = 'draw'
         else:
             # Draw board
