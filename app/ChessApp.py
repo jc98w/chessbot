@@ -7,7 +7,7 @@ BACKGROUND_GREEN = '#228833'
 BACKGROUND_WHITE = '#EEEEEE'
 DEFAULT_FONT = 'Arial, 20'
 
-class GameWindow(tk.Tk):
+class ChessApp(tk.Tk):
 
     def __init__(self):
         tk.Tk.__init__(self)
@@ -59,3 +59,9 @@ class GameWindow(tk.Tk):
         black_bot_status = self.menu_frame.get_black_is_bot()
         self.board_canvas.set_bots(white=white_bot_status, black=black_bot_status)
         self.board_canvas.after(1000, self.board_canvas.trigger_bot_move)
+
+if __name__ == '__main__':
+    root = ChessApp()
+    root.show_start_menu()
+
+    root.mainloop()
