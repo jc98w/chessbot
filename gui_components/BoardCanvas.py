@@ -10,7 +10,6 @@ from components.ChessBot import ChessBot
 from storage.BoardLog import BoardLog
 from storage.DatabaseManager import DatabaseManager
 
-BACKGROUND_COLOR = '#228833'
 LIGHT_COLOR = '#DEB887'
 DARK_COLOR = '#8B4513'
 FONT = 'Arial'
@@ -20,10 +19,11 @@ BORDER_WIDTH = 10
 PIECE_ICONS = {'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
                'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'}
 
-class BoardFrame(Canvas):
+class BoardCanvas(Canvas):
 
-    def __init__(self, *args, **kwargs):
-        Canvas.__init__(self, *args, **kwargs, background=BACKGROUND_COLOR)
+    def __init__(self, parent, *args, **kwargs):
+        Canvas.__init__(self, parent, *args, **kwargs)
+        self.parent = parent
         self.board = Board()
         try:
             print('Connecting to database...', end='')
@@ -283,7 +283,12 @@ class BoardFrame(Canvas):
                 dialog.grab_release()
                 dialog.destroy()
 
+            def menu():
+                close()
+                self.parent.show_start_menu()
+
             Button(dialog, text='Reset', command=close, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
+            Button(dialog, text='Menu', command=menu, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
 
             dialog.update_idletasks()
             parent_window = self.winfo_toplevel()
