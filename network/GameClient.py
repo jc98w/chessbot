@@ -25,6 +25,7 @@ class GameClient:
         """ Creates new socket for receiving UDP broadcast and TCP connection"""
         # establish socket to receive host broadcast
         self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.broadcast_sock.settimeout(10)
         self.broadcast_sock.bind(('', 50000))
 
         # socket for in game communication
@@ -32,7 +33,10 @@ class GameClient:
 
     def receive_broadcast(self):
         """ Receives UDP broadcasts and updates username and address book"""
-        data, address = self.broadcast_sock.recvfrom(1024)
+        try:
+            data, address = self.broadcast_sock.recvfrom(1024)
+        except TimeoutError:
+            return
         decoded_data = data.decode('utf-8')
         match = BROADCAST_PATTERN.match(decoded_data)
         if not match:
@@ -44,6 +48,10 @@ class GameClient:
         if username not in self.addr_book:
             # Add newly found user to address book
             self.addr_book[username] = (address[0], int(port))
+
+    def get_users(self):
+        """ Returns users in address book """
+        return list(self.addr_book.keys())
 
     def connect(self, username):
         """ Connects to address associated with the username in the address book"""

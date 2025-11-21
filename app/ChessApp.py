@@ -1,7 +1,9 @@
 import tkinter as tk
 
-from gui_components.BoardCanvas import BoardCanvas
+from gui_components.BoardCanvas2 import BoardCanvas2
 from gui_components.MenuFrame import MenuFrame
+from network.GameClient import GameClient
+from network.GameHoster import GameHoster
 
 BACKGROUND_GREEN = '#228833'
 BACKGROUND_WHITE = '#EEEEEE'
@@ -15,10 +17,14 @@ class ChessApp(tk.Tk):
         self.geometry("500x500")
         self.set_default_styles()
 
+        # Establish network managers
+        self.server_manager = GameHoster()
+        self.client_manager = GameClient()
+
         # Create frames for menu and game
         self.current_frame = None
         self.menu_frame = MenuFrame(self)
-        self.board_canvas = BoardCanvas(self)
+        self.board_canvas = BoardCanvas2(self)
         self.menu_frame['background'] = BACKGROUND_GREEN
         self.board_canvas['background'] = BACKGROUND_GREEN
 
@@ -55,13 +61,19 @@ class ChessApp(tk.Tk):
         self.board_canvas.pack(fill='both', expand=True)
 
         # import settings from menu frame
-        white_bot_status = self.menu_frame.get_white_is_bot()
-        black_bot_status = self.menu_frame.get_black_is_bot()
-        self.board_canvas.set_bots(white=white_bot_status, black=black_bot_status)
-        self.board_canvas.after(1000, self.board_canvas.trigger_bot_move)
+        white_player_status = self.menu_frame.get_player_status('white')
+        black_player_status = self.menu_frame.get_player_status('black')
+        self.board_canvas.set_player_types(white_player_status, black_player_status)
+
+        self.board_canvas.start_game()
+
+    def close(self):
+        self.board_canvas.kill_game_thread()
+        root.destroy()
 
 if __name__ == '__main__':
     root = ChessApp()
     root.show_start_menu()
 
+    root.protocol('WM_DELETE_WINDOW', root.close)
     root.mainloop()

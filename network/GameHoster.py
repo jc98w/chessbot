@@ -12,6 +12,7 @@ class GameHoster:
         self.game_sock = None
         self.game_sock_port = None
         self.establish_sockets()
+        self.broadcasting = False
 
         self.client_sock = None
 
@@ -38,16 +39,16 @@ class GameHoster:
         # Port 50000 is known to Host and Client for broadcasting purposes
         broadcast_address = ('255.255.255.255', 50000)
         message = f'chess_host:{self.username}:{self.game_sock_port}'
-        broadcasting = True
-        while broadcasting:
+        self.broadcasting = True
+        while self.broadcasting:
             try:
                 if self.broadcast_sock is None:
-                    broadcasting = False
+                    self.broadcasting = False
                 else:
                     self.broadcast_sock.sendto(message.encode('utf-8'), broadcast_address)
                 sleep(3)
             except OSError:
-                broadcasting = False
+                self.broadcasting = False
 
     def establish_connection(self):
         """ Links sockets to allow in game communication"""
@@ -60,8 +61,7 @@ class GameHoster:
         self.client_sock, cli_addr = self.game_sock.accept()
 
         # End broadcast
-        self.broadcast_sock.close()
-        self.broadcast_sock = None
+        self.broadcasting = False
         broadcast_thread.join()
 
     def receive_data(self):
@@ -80,13 +80,15 @@ class GameHoster:
         except OSError:
             result[0] = 0
         try:
-            self.game_sock.close()
+            if self.game_sock is not None:
+                self.game_sock.close()
         except OSError as e:
             print(e)
             result[1] = 0
         try:
-            self.client_sock.shutdown(socket.SHUT_RDWR)
-            self.client_sock.close()
+            if self.client_sock is not None:
+                self.client_sock.shutdown(socket.SHUT_RDWR)
+                self.client_sock.close()
         except OSError:
             result[2] = 0
         return result
