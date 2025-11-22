@@ -1,7 +1,7 @@
+import re
 import threading
 import tkinter as tk
 from random import random
-
 
 class MenuFrame(tk.Frame):
 
@@ -12,7 +12,12 @@ class MenuFrame(tk.Frame):
         self.client_manager = parent.client_manager
         self.udp_broadcast_thread = None
         self.udp_listen_thread = None
+
         self.user_list = tk.Variable()
+        self.username = tk.StringVar(value=self.server_manager.get_username())
+        self.username.trace('w', self.username_check)
+        self.host_button = None
+        self.username_box = None
 
         # Default to white being the player and black being a bot
         self.white_is_bot = tk.BooleanVar()
@@ -73,17 +78,30 @@ class MenuFrame(tk.Frame):
         available_matches = tk.Listbox(lan_frame, listvariable=self.user_list,selectmode=tk.SINGLE)
 
         # Widgets for hosting
-        host_button = tk.Button(lan_frame, text='host', command=self.host)
-        username_box = tk.Entry(lan_frame)
+        self.host_button = tk.Button(lan_frame, text='host', command=self.host)
+
+        self.username_box = tk.Entry(lan_frame, textvariable=self.username)
 
         # Arrange widgets in lan_frame
         back_button.grid(row=0, column=0, sticky='w')
         match_list_label.grid(row=0, column=1)
         available_matches.grid(row=1, column=1, columnspan=2)
-        host_button.grid(row=3, column=0)
-        username_box.grid(row=3, column=1)
+        self.host_button.grid(row=3, column=0)
+        self.username_box.grid(row=3, column=1)
 
         return lan_frame
+
+    def username_check(self, *args):
+        """ Keeps username entry limited to 10 alphanumeric characters
+            Disables host button if username is empty """
+        name = self.username.get()
+        button_state = tk.DISABLED if name == '' else tk.NORMAL
+        self.host_button.config(state=button_state)
+        fixed_name = ''
+        for index, char in enumerate(name):
+            if char.isalnum() and index < 10:
+                fixed_name += char
+        self.username.set(fixed_name)
 
     def set_frame(self, frame):
         """ unpacks current frame and packs selected frame """
@@ -135,6 +153,9 @@ class MenuFrame(tk.Frame):
 
     def host(self):
         """ Become game host """
+        username = self.username.get()
+        self.server_manager.set_username(username)
+
         self.udp_broadcast_thread = threading.Thread(target=self._host_thread)
         self.udp_broadcast_thread.start()
 
