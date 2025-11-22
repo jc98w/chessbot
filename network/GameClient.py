@@ -1,6 +1,5 @@
 import socket
 import re
-import threading
 
 # Regular expression for verifying proper format for incoming broadcasts
 BROADCAST_PATTERN = re.compile(r"""
@@ -25,7 +24,8 @@ class GameClient:
         """ Creates new socket for receiving UDP broadcast and TCP connection"""
         # establish socket to receive host broadcast
         self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.broadcast_sock.settimeout(10)
+        self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.broadcast_sock.settimeout(5)
         self.broadcast_sock.bind(('', 50000))
 
         # socket for in game communication
@@ -36,18 +36,22 @@ class GameClient:
         try:
             data, address = self.broadcast_sock.recvfrom(1024)
         except TimeoutError:
-            return
+            return False
+        except OSError:
+            return False
+
         decoded_data = data.decode('utf-8')
         match = BROADCAST_PATTERN.match(decoded_data)
         if not match:
             # Ignore invalid broadcasts (should be 'chess host:username:port')
-            return
+            return False
         username = match.group('username')
         port = match.group('port')
 
         if username not in self.addr_book:
             # Add newly found user to address book
             self.addr_book[username] = (address[0], int(port))
+        return True
 
     def get_users(self):
         """ Returns users in address book """
@@ -86,8 +90,9 @@ class GameClient:
         except OSError:
             result[0] = 0
         try:
-            self.game_sock.shutdown(socket.SHUT_RDWR)
-            self.game_sock.close()
+            if self.game_sock is not None:
+                self.game_sock.shutdown(socket.SHUT_RDWR)
+                self.game_sock.close()
         except OSError:
             result[1] = 0
         return result
@@ -99,6 +104,7 @@ class GameClient:
 if __name__ == '__main__':
     client = GameClient()
     client.receive_broadcast()
-    client.connect('user123')
+    user = input('username?')
+    client.connect(user)
     client.send_data(b'hello server!')
     client.close_sockets()

@@ -1,3 +1,4 @@
+import threading
 import tkinter as tk
 
 from gui_components.BoardCanvas2 import BoardCanvas2
@@ -68,7 +69,10 @@ class ChessApp(tk.Tk):
         self.board_canvas.start_game()
 
     def close(self):
+        self.menu_frame.shutdown()
         self.board_canvas.kill_game_thread()
+        self.server_manager.close_sockets()
+        self.client_manager.close_sockets()
         root.destroy()
 
 if __name__ == '__main__':

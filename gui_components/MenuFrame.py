@@ -1,5 +1,7 @@
 import threading
 import tkinter as tk
+from random import random
+
 
 class MenuFrame(tk.Frame):
 
@@ -26,6 +28,10 @@ class MenuFrame(tk.Frame):
         self.lan_frame = self.prep_lan_frame()
         self.set_frame(self.options_frame)
 
+        self.bind('<<Connected>>', self.start_host_match)
+
+        self.shutdown_flag = False
+
     def prep_options_menu(self):
         """ Sets up the menu widgets for selecting bots, starting a game, and entering LAN multiplayer """
         button_frame = tk.Frame(self, padx=50)
@@ -40,7 +46,9 @@ class MenuFrame(tk.Frame):
         start_button = tk.Button(button_frame, text='Start match', command=self.start_match)
         lan_button = tk.Button(button_frame, text='LAN match', command=lambda: self.set_frame(self.lan_frame))
 
-        # Use grid to pack objects into MenuFrame
+        exit_button = tk.Button(button_frame, text='Exit', command=self.parent.close)
+
+        # Grid pack objects into MenuFrame
         button_frame.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(1, weight=1)
         white_king_symbol.grid(row=0, column=0, pady=10, ipadx=10, sticky='e')
@@ -49,6 +57,7 @@ class MenuFrame(tk.Frame):
         black_bot_checkbutton.grid(row=1, column=1, pady=10, sticky='w')
         start_button.grid(row=2, column=0, columnspan=3, pady=10)
         lan_button.grid(row=3, column=0, columnspan=3, pady=10)
+        exit_button.grid(row=4, column=0, columnspan=3, pady=10)
 
         return button_frame
 
@@ -86,11 +95,27 @@ class MenuFrame(tk.Frame):
         if self.current_frame == self.lan_frame:
             self.udp_listen_thread = threading.Thread(target=self.check_for_opponents)
             self.udp_listen_thread.start()
+        else:
+            self.server_manager.end_broadcast()
 
     def start_match(self):
         """ Exits menu and starts game """
         self.white_player_status = 'bot' if self.white_is_bot.get() else 'player'
         self.black_player_status = 'bot' if self.black_is_bot.get() else 'player'
+        self.parent.start_game()
+
+    def start_host_match(self, event):
+        """ Configure lan match as host and start game """
+        lan_opp_color = 'white' if self.white_player_status == 'lan_opp' else 'black'
+        # Tell opponent what color they will play
+        self.server_manager.send_data(lan_opp_color.encode('utf-8'))
+        self.parent.start_game()
+
+    def start_client_match(self, event):
+        """ Configure lan match as client and start game """
+        client_color = self.client_manager.receive_data()
+        self.white_player_status = 'player' if client_color == 'white' else 'lan_opp'
+        self.black_player_status = 'player' if client_color == 'black' else 'lan_opp'
         self.parent.start_game()
 
     def get_player_status(self, color):
@@ -105,10 +130,23 @@ class MenuFrame(tk.Frame):
     def check_for_opponents(self):
         """ Checks for UDP broadcasts from other users """
         while self.current_frame == self.lan_frame:
-            self.client_manager.receive_broadcast()
-            self.user_list.set(self.client_manager.get_users())
+            if self.client_manager.receive_broadcast():
+                self.user_list.set(self.client_manager.get_users())
 
     def host(self):
         """ Become game host """
-        self.udp_broadcast_thread = threading.Thread(target=self.server_manager.establish_connection)
+        self.udp_broadcast_thread = threading.Thread(target=self._host_thread)
         self.udp_broadcast_thread.start()
+
+    def _host_thread(self):
+        """ Helper for host method. Triggers event when connection is established to start game """
+        self.server_manager.establish_connection()
+        self.white_player_status = 'player' if random() < 0.5 else 'lan_opp'
+        self.black_player_status = 'player' if self.white_player_status == 'lan_opp' else 'lan_opp'
+        if not self.shutdown_flag:
+            self.event_generate('<<Connected>>', when='tail')
+
+    def shutdown(self):
+        """ End check_for_opponent loop """
+        self.shutdown_flag = True
+        self.current_frame = None

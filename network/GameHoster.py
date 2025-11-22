@@ -50,6 +50,10 @@ class GameHoster:
             except OSError:
                 self.broadcasting = False
 
+    def end_broadcast(self):
+        """ Turns off self.broadcasting flag to end UPD broadcast """
+        self.broadcasting = False
+
     def establish_connection(self):
         """ Links sockets to allow in game communication"""
         # Start broadcast
@@ -57,8 +61,11 @@ class GameHoster:
         broadcast_thread.start()
 
         # Wait for connection
-        self.game_sock.listen()
-        self.client_sock, cli_addr = self.game_sock.accept()
+        try:
+            self.game_sock.listen()
+            self.client_sock, cli_addr = self.game_sock.accept()
+        except OSError:
+            self.close_sockets()
 
         # End broadcast
         self.broadcasting = False
