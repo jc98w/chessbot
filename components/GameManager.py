@@ -15,13 +15,16 @@ class GameManager:
         self.board = Board()
         self.turn = 'white'
         self.winner = None
-        self.white_player_type = 'player'
-        self.black_player_type = 'bot'
+        self.white_player_type = None
+        self.black_player_type = None
 
         self.network_manager = None
         self.lan_match = False
 
         self.move_queue = queue.Queue()
+        self.lan_opp_queue = queue.Queue()
+        self.lan_listen_thread = None
+
         self.promotion_piece = None
         self.promotion_flag = False
         self.wait_for_promotion_flag = False
@@ -74,7 +77,7 @@ class GameManager:
             return None
 
     def is_players_turn(self):
-        return self.get_player_type(self.turn)
+        return self.get_player_type(self.turn) == 'player'
 
     def good_piece_selection(self, row, col):
         """ Used for determining if a click is appropriate
@@ -109,6 +112,9 @@ class GameManager:
         return [(-1, -1), 'safe']
 
     def game_loop(self):
+        if self.lan_match:
+            self.lan_listen_thread = threading.Thread(target=self._lan_listen)
+            self.lan_listen_thread.start()
         while self.winner is None:
             for color in ['white', 'black']:
                 if self.game_loop_interrupt:
@@ -128,8 +134,10 @@ class GameManager:
                     print(f'It\'s {player_type} {color}\'s turn')
                     move = None
                     if player_type == 'player':
+                        print('my move')
                         move = self.player_move()
                     elif player_type == 'lan_opp':
+                        print('opp move')
                         move =self.lan_move()
                     else:
                         move = self.bot_move(color)
@@ -173,41 +181,69 @@ class GameManager:
         self.waiting_on_move = True
         move = None
         while self.waiting_on_move:
-            sleep(0.5)
-            if not self.move_queue.empty():
-                # Retrieve move from queue
-                move = self.move_queue.get()
+            # Retrieve move from queue
+            move = self.move_queue.get()
 
-                if self.board.move_piece(*move):
-                    self.waiting_on_move = False
-                    if self.board.pawn_should_promote(move[2], move[3]):
-                        self.promotion_flag = True
-                        # wait for player to select promotion piece
-                        while self.promotion_piece is None:
-                            self.wait_for_promotion_flag = False
-                            sleep(1)
-                        self.board.promote(move[2], move[3], self.promotion_piece)
-                        move.append(self.promotion_piece)
+            if self.board.move_piece(*move):
+                self.waiting_on_move = False
+                if self.board.pawn_should_promote(move[2], move[3]):
+                    self.promotion_flag = True
+                    # wait for player to select promotion piece
+                    while self.promotion_piece is None:
+                        self.wait_for_promotion_flag = False
+                        sleep(1)
+                    self.board.promote(move[2], move[3], self.promotion_piece)
+                    move.append(self.promotion_piece)
 
-                    # Send data to opposing player
-                    if self.lan_match:
-                        self.network_manager.send_data(*move)
+                # Send data to opposing player
+                if self.lan_match:
+                    move_str = ''
+                    for item in move:
+                        move_str += str(item)
+                    self.network_manager.send_data(move_str)
 
-                    self.promotion_piece = None
-                    self.promotion_flag = False
-                    self.wait_for_promotion_flag = False
+                self.promotion_piece = None
+                self.promotion_flag = False
+                self.wait_for_promotion_flag = False
         return move
 
     def lan_move(self):
         """ Waits to receive move from lan opponent """
         self.waiting_on_move = True
-        move = None
+        move = []
         while self.waiting_on_move:
-            sleep(1)
-            move = self.network_manager.receive_data()
+            move = self.lan_opp_queue.get()
             if self.board.move_piece(*move):
                 self.waiting_on_move = False
+
         return move
+
+    def _lan_listen(self):
+        """ Background task to queue lan opponent's moves """
+        while not self.game_loop_interrupt:
+            sleep(1)
+            move = []
+            try:
+                move_str = self.network_manager.receive_data()
+            except OSError:
+                # End game in draw if network interrupted
+                self.winner = 'draw'
+                return
+
+            try:
+                for char in move_str[:4]:
+                    if char.isnumeric():
+                        move.append(ord(char) - ord('0'))
+                if len(move) == 5:
+                    move.append(move_str[-1])
+                elif len(move) > 5:
+                    # throw out bad move
+                    continue
+            except TypeError:
+                continue
+            print(move)
+            self.lan_opp_queue.put(move)
+
 
     def bot_move(self, color):
         sleep(1)

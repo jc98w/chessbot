@@ -17,7 +17,6 @@ class GameClient:
         self.game_sock = None
         self.establish_sockets()
 
-        self.server = None
         self.addr_book = {}
 
     def establish_sockets(self):
@@ -35,6 +34,8 @@ class GameClient:
         """ Receives UDP broadcasts and updates username and address book"""
         try:
             data, address = self.broadcast_sock.recvfrom(1024)
+        except AttributeError:
+            return False
         except TimeoutError:
             return False
         except OSError:
@@ -76,11 +77,14 @@ class GameClient:
 
     def send_data(self, data):
         """ Sends data to opponent through TCP socket"""
-        self.game_sock.send(data)
+        self.game_sock.send(data.encode('utf-8'))
 
     def receive_data(self):
         """ Receives data from opponent through TCP socket"""
-        return self.game_sock.recv(1024)
+        msg = self.game_sock.recv(1024).decode('utf-8')
+        print(f'Client received {msg}')
+        return msg
+
 
     def close_sockets(self):
         result = [1, 1]
@@ -106,5 +110,5 @@ if __name__ == '__main__':
     client.receive_broadcast()
     user = input('username?')
     client.connect(user)
-    client.send_data(b'hello server!')
+    client.send_data('hello server!')
     client.close_sockets()

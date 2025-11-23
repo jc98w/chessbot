@@ -21,13 +21,14 @@ class NetworkTest(unittest.TestCase):
         est_con_thread.join()
 
         msg_sent = 'hello server!'
-        client.send_data(msg_sent.encode('utf-8'))
-        msg_received = server.receive_data().decode('utf-8')
+        client.send_data(msg_sent)
+        msg_received = server.receive_data()
+        print(f'Asserting {msg_sent} == {msg_received}')
         self.assertEqual(msg_sent, msg_received)
 
         msg_sent = 'hello client!'
-        server.send_data(msg_sent.encode('utf-8'))
-        msg_received = client.receive_data().decode('utf-8')
+        server.send_data(msg_sent)
+        msg_received = client.receive_data()
         self.assertEqual(msg_sent, msg_received)
 
         print('Shutting down sockets...')

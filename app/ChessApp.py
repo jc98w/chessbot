@@ -1,6 +1,7 @@
 import threading
 import tkinter as tk
 
+from components.GameManager import GameManager
 from gui_components.BoardCanvas2 import BoardCanvas2
 from gui_components.MenuFrame import MenuFrame
 from network.GameClient import GameClient
@@ -18,9 +19,10 @@ class ChessApp(tk.Tk):
         self.geometry("500x500")
         self.set_default_styles()
 
-        # Establish network managers
+        # Establish network and game managers
         self.server_manager = GameHoster()
         self.client_manager = GameClient()
+        self.game_manager = GameManager()
 
         # Create frames for menu and game
         self.current_frame = None
@@ -56,15 +58,24 @@ class ChessApp(tk.Tk):
     * Switches view to game board
     '''
     def start_game(self):
-        # Switch frame to board frame
-        self.hide_current_frame()
-        self.current_frame = self.board_canvas
-        self.board_canvas.pack(fill='both', expand=True)
-
         # import settings from menu frame
         white_player_status = self.menu_frame.get_player_status('white')
         black_player_status = self.menu_frame.get_player_status('black')
         self.board_canvas.set_player_types(white_player_status, black_player_status)
+        print(f'white: {white_player_status}, black:{black_player_status}')
+
+        # Set GameManager network_manager as server_manager or client_manager
+        if self.menu_frame.agent_type == 'host':
+            self.game_manager.set_network_manager(self.server_manager)
+        elif self.menu_frame.agent_type == 'client':
+            self.game_manager.set_network_manager(self.client_manager)
+        else:
+            self.game_manager.set_network_manager(None)
+
+        # Switch frame to board frame
+        self.hide_current_frame()
+        self.current_frame = self.board_canvas
+        self.board_canvas.pack(fill='both', expand=True)
 
         self.board_canvas.start_game()
 
@@ -73,11 +84,14 @@ class ChessApp(tk.Tk):
         self.board_canvas.kill_game_thread()
         self.server_manager.close_sockets()
         self.client_manager.close_sockets()
-        root.destroy()
+        self.destroy()
 
 if __name__ == '__main__':
     root = ChessApp()
-    root.show_start_menu()
+    try:
+        root.show_start_menu()
 
-    root.protocol('WM_DELETE_WINDOW', root.close)
-    root.mainloop()
+        root.protocol('WM_DELETE_WINDOW', root.close)
+        root.mainloop()
+    except KeyboardInterrupt:
+        root.close()

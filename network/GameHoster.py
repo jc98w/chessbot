@@ -73,11 +73,13 @@ class GameHoster:
 
     def receive_data(self):
         """ Receive data from opponent"""
-        return self.client_sock.recv(1024)
+        msg = self.client_sock.recv(1024).decode('utf-8')
+        print(f'Host received {msg}')
+        return msg
 
     def send_data(self, data):
         """ Sends data to opponent"""
-        self.client_sock.send(data)
+        self.client_sock.send(data.encode('utf-8'))
 
     def close_sockets(self):
         result = [1, 1, 1]

@@ -10,6 +10,7 @@ class MenuFrame(tk.Frame):
         self.parent = parent
         self.server_manager = parent.server_manager
         self.client_manager = parent.client_manager
+        self.agent_type = None
         self.udp_broadcast_thread = None
         self.udp_listen_thread = None
 
@@ -18,6 +19,7 @@ class MenuFrame(tk.Frame):
         self.username.trace('w', self.username_check)
         self.host_button = None
         self.username_box = None
+        self.matches_listbox = None
 
         # Default to white being the player and black being a bot
         self.white_is_bot = tk.BooleanVar()
@@ -75,7 +77,8 @@ class MenuFrame(tk.Frame):
 
         # Show list of matches that can be joined
         match_list_label = tk.Label(lan_frame, text='available matches')
-        available_matches = tk.Listbox(lan_frame, listvariable=self.user_list,selectmode=tk.SINGLE)
+        self.matches_listbox = tk.Listbox(lan_frame, listvariable=self.user_list,selectmode=tk.SINGLE)
+        self.matches_listbox.bind('<<ListboxSelect>>', self.select_host)
 
         # Widgets for hosting
         self.host_button = tk.Button(lan_frame, text='host', command=self.host)
@@ -85,11 +88,17 @@ class MenuFrame(tk.Frame):
         # Arrange widgets in lan_frame
         back_button.grid(row=0, column=0, sticky='w')
         match_list_label.grid(row=0, column=1)
-        available_matches.grid(row=1, column=1, columnspan=2)
+        self.matches_listbox.grid(row=1, column=1, columnspan=2)
         self.host_button.grid(row=3, column=0)
         self.username_box.grid(row=3, column=1)
 
         return lan_frame
+
+    def pack(self, *args, **kwargs):
+        """ Overrides Frame::pack
+            Sets current_frame to options_frame when the menu is packed """
+        tk.Frame.pack(self, *args, **kwargs)
+        self.current_frame = self.options_frame
 
     def username_check(self, *args):
         """ Keeps username entry limited to 10 alphanumeric characters
@@ -118,22 +127,10 @@ class MenuFrame(tk.Frame):
 
     def start_match(self):
         """ Exits menu and starts game """
-        self.white_player_status = 'bot' if self.white_is_bot.get() else 'player'
-        self.black_player_status = 'bot' if self.black_is_bot.get() else 'player'
-        self.parent.start_game()
-
-    def start_host_match(self, event):
-        """ Configure lan match as host and start game """
-        lan_opp_color = 'white' if self.white_player_status == 'lan_opp' else 'black'
-        # Tell opponent what color they will play
-        self.server_manager.send_data(lan_opp_color.encode('utf-8'))
-        self.parent.start_game()
-
-    def start_client_match(self, event):
-        """ Configure lan match as client and start game """
-        client_color = self.client_manager.receive_data()
-        self.white_player_status = 'player' if client_color == 'white' else 'lan_opp'
-        self.black_player_status = 'player' if client_color == 'black' else 'lan_opp'
+        if self.current_frame == self. options_frame:
+            self.white_player_status = 'bot' if self.white_is_bot.get() else 'player'
+            self.black_player_status = 'bot' if self.black_is_bot.get() else 'player'
+        self.shutdown()
         self.parent.start_game()
 
     def get_player_status(self, color):
@@ -149,7 +146,9 @@ class MenuFrame(tk.Frame):
         """ Checks for UDP broadcasts from other users """
         while self.current_frame == self.lan_frame:
             if self.client_manager.receive_broadcast():
-                self.user_list.set(self.client_manager.get_users())
+                for user in (self.client_manager.get_users()):
+                    if user != self.username.get() and user not in self.user_list.get():
+                        self.matches_listbox.insert(tk.END, user)
 
     def host(self):
         """ Become game host """
@@ -166,6 +165,27 @@ class MenuFrame(tk.Frame):
         self.black_player_status = 'player' if self.white_player_status == 'lan_opp' else 'lan_opp'
         if not self.shutdown_flag:
             self.event_generate('<<Connected>>', when='tail')
+
+    def start_host_match(self, event):
+        """ Configure lan match as host and start game """
+        lan_opp_color = 'white' if self.white_player_status == 'lan_opp' else 'black'
+        # Tell opponent what color they will play
+        self.server_manager.send_data(lan_opp_color)
+        self.agent_type = 'host'
+        print('starting game as host...')
+        self.start_match()
+
+    def select_host(self, event):
+        """ Connects to host from list of available matches """
+        index = self.matches_listbox.curselection()
+        host_user = self.matches_listbox.get(index)
+        self.client_manager.connect(host_user)
+        client_color = self.client_manager.receive_data()
+        self.white_player_status = 'player' if client_color == 'white' else 'lan_opp'
+        self.black_player_status = 'player' if client_color == 'black' else 'lan_opp'
+        self.agent_type = 'client'
+        print('Starting game as client...')
+        self.start_match()
 
     def shutdown(self):
         """ End check_for_opponent loop """

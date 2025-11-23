@@ -18,7 +18,7 @@ class BoardCanvas2(tk.Canvas):
     def __init__(self, parent, *args, **kwargs):
         tk.Canvas.__init__(self, parent, *args, **kwargs)
         self.parent = parent
-        self.game_manager = GameManager()
+        self.game_manager = parent.game_manager
         self.game_thread = None
 
         self.cell_size = 1
