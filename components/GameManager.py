@@ -113,7 +113,7 @@ class GameManager:
 
     def game_loop(self):
         if self.lan_match:
-            self.lan_listen_thread = threading.Thread(target=self._lan_listen)
+            self.lan_listen_thread = threading.Thread(target=self._lan_listen, daemon=True)
             self.lan_listen_thread.start()
         while self.winner is None:
             for color in ['white', 'black']:
@@ -149,12 +149,19 @@ class GameManager:
                 if self.board.in_checkmate(self.board.opposite_color(color)):
                     self.winner = color
         # Commit log in background
-        threading.Thread(target=self.commit_log).start()
+        threading.Thread(target=self.commit_log, daemon=True).start()
 
         return self.winner
 
 
-    def end_game_loop(self):
+    def interrupt_game_loop(self):
+        """ Ends game loop with interrupt flag
+            Disconnects TCP socket in lan matches """
+        if self.lan_match:
+            try:
+                self.network_manager.send_data('disconnect')
+            except OSError:
+                pass
         self.game_loop_interrupt = True
         self.waiting_on_move = False
 
@@ -225,9 +232,13 @@ class GameManager:
             move = []
             try:
                 move_str = self.network_manager.receive_data()
+                if move_str == 'disconnect' or move_str == '':
+                    raise OSError('Connection lost')
             except OSError:
                 # End game in draw if network interrupted
-                self.winner = 'draw'
+                print('_lan_listen done')
+                self.winner = 'disconnect'
+                self.interrupt_game_loop()
                 return
 
             try:
@@ -244,8 +255,8 @@ class GameManager:
             print(move)
             self.lan_opp_queue.put(move)
 
-
     def bot_move(self, color):
+        """ Returns bot generated move """
         sleep(1)
         while True:
             move = self.bot.decide_move(self.board, color)

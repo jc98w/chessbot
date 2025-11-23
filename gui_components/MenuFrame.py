@@ -1,4 +1,3 @@
-import re
 import threading
 import tkinter as tk
 from random import random
@@ -120,7 +119,7 @@ class MenuFrame(tk.Frame):
         self.current_frame.pack(fill='y', expand=True)
 
         if self.current_frame == self.lan_frame:
-            self.udp_listen_thread = threading.Thread(target=self.check_for_opponents)
+            self.udp_listen_thread = threading.Thread(target=self.check_for_opponents, daemon=True)
             self.udp_listen_thread.start()
         else:
             self.server_manager.end_broadcast()
@@ -155,7 +154,7 @@ class MenuFrame(tk.Frame):
         username = self.username.get()
         self.server_manager.set_username(username)
 
-        self.udp_broadcast_thread = threading.Thread(target=self._host_thread)
+        self.udp_broadcast_thread = threading.Thread(target=self._host_thread, daemon=True)
         self.udp_broadcast_thread.start()
 
     def _host_thread(self):
@@ -190,4 +189,4 @@ class MenuFrame(tk.Frame):
     def shutdown(self):
         """ End check_for_opponent loop """
         self.shutdown_flag = True
-        self.current_frame = None
+        self.set_frame(self.options_frame)

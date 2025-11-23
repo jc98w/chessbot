@@ -211,7 +211,13 @@ class BoardCanvas2(tk.Canvas):
             dialog = tk.Toplevel(self)
             dialog.overrideredirect(True)
 
-            message = f'{winner.capitalize()} wins!' if winner != 'draw' else 'Draw!'
+            match winner:
+                case 'disconnect':
+                    message = 'Connection lost'
+                case 'draw':
+                    message = 'Draw!'
+                case _:
+                    message = f'{winner.capitalize()} wins!'
             msg_lbl = tk.Label(dialog, text=message, font=(FONT, int(self.icon_size * 0.75)))
             msg_lbl.pack(pady=10)
 
@@ -227,7 +233,8 @@ class BoardCanvas2(tk.Canvas):
                 dialog.destroy()
                 self.parent.show_start_menu()
 
-            tk.Button(dialog, text='Reset', command=close, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
+            if winner != 'disconnect':
+                tk.Button(dialog, text='Reset', command=close, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
             tk.Button(dialog, text='Menu', command=menu, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
 
             dialog.update_idletasks()
@@ -251,9 +258,10 @@ class BoardCanvas2(tk.Canvas):
             dialog.wait_window()
 
     def start_game(self):
-        self.game_thread = threading.Thread(target=self.game_manager.game_loop)
-        self.after(100, self.game_thread.start)
-        self.after(200, self.draw_board)
+        """ Starts game thread and draw loop """
+        self.game_thread = threading.Thread(target=self.game_manager.game_loop, daemon=True)
+        self.game_thread.start()
+        self.after(100, self.draw_board)
 
     def set_player_types(self, white='player', black='bot'):
         """ Sets player types as player, bot, or lan_opp """
@@ -271,4 +279,4 @@ class BoardCanvas2(tk.Canvas):
 
     def kill_game_thread(self):
         if self.game_thread is not None and self.game_thread.is_alive():
-            self.game_manager.end_game_loop()
+            self.game_manager.interrupt_game_loop()

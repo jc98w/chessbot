@@ -57,7 +57,7 @@ class GameHoster:
     def establish_connection(self):
         """ Links sockets to allow in game communication"""
         # Start broadcast
-        broadcast_thread = threading.Thread(target=self._broadcast)
+        broadcast_thread = threading.Thread(target=self._broadcast, daemon=True)
         broadcast_thread.start()
 
         # Wait for connection
@@ -70,6 +70,15 @@ class GameHoster:
         # End broadcast
         self.broadcasting = False
         broadcast_thread.join()
+
+    def disconnect(self):
+        """" Disconnect from client """
+        if self.client_sock is not None:
+            try:
+                self.client_sock.shutdown(socket.SHUT_RDWR)
+                self.client_sock.close()
+            except OSError:
+                return
 
     def receive_data(self):
         """ Receive data from opponent"""

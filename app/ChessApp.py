@@ -80,11 +80,24 @@ class ChessApp(tk.Tk):
         self.board_canvas.start_game()
 
     def close(self):
+        print('******PRE-SHUTDOWN*********')
+        for thread in threading.enumerate():
+            is_problem = not thread.daemon and thread.name != "MainThread"
+            highlight = " <---- PROBLEM" if is_problem else ""
+            print(f'* Name: {thread.name}, is Daemon: {thread.daemon}{highlight}')
+        print('***************************')
         self.menu_frame.shutdown()
         self.board_canvas.kill_game_thread()
         self.server_manager.close_sockets()
         self.client_manager.close_sockets()
         self.destroy()
+        print('****POST-SHUTDOWN**********')
+        for thread in threading.enumerate():
+            is_problem = not thread.daemon and thread.name != "MainThread"
+            highlight = " <---- PROBLEM" if is_problem else ""
+            print(f'* Name: {thread.name}, is Daemon: {thread.daemon}{highlight}')
+        print('***************************')
+
 
 if __name__ == '__main__':
     root = ChessApp()
@@ -94,4 +107,5 @@ if __name__ == '__main__':
         root.protocol('WM_DELETE_WINDOW', root.close)
         root.mainloop()
     except KeyboardInterrupt:
+        print(threading.enumerate())
         root.close()
