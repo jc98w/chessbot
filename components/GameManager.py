@@ -84,8 +84,13 @@ class GameManager:
             ie if the player is white, they can't move black's pieces """
         return self.is_players_turn() and Board.get_color(self.board.get_piece(row, col)) == self.turn
 
-    def need_promotion(self):
+    def need_promotion(self, move):
         """ Returns true if player needs to promote a pawn """
+        if self.board.get_piece(move[0], move[1]) in ('p', 'P') \
+            and move[2] in (0, 7) and self.board.get_piece(move[2], move[3]) != '':
+            return True
+        else:
+            return False
         self.wait_for_promotion_flag = True
         while self.wait_for_promotion_flag:
             sleep(0.1)
@@ -113,8 +118,19 @@ class GameManager:
 
     def game_loop(self):
         if self.lan_match:
+            # Start listening with a clean slate
+            while not self.lan_opp_queue.empty():
+                self.lan_opp_queue.get_nowait()
+            while not self.move_queue.empty():
+                self.move_queue.get_nowait()
+
+            self.network_manager.send_data('start')
+            while self.network_manager.receive_data() != 'start':
+                continue
+
             self.lan_listen_thread = threading.Thread(target=self._lan_listen, daemon=True)
             self.lan_listen_thread.start()
+
         while self.winner is None:
             for color in ['white', 'black']:
                 if self.game_loop_interrupt:
@@ -148,6 +164,7 @@ class GameManager:
                 # Check for win
                 if self.board.in_checkmate(self.board.opposite_color(color)):
                     self.winner = color
+                    print(f'Winner: {self.winner}')
         # Commit log in background
         threading.Thread(target=self.commit_log, daemon=True).start()
 
@@ -193,14 +210,6 @@ class GameManager:
 
             if self.board.move_piece(*move):
                 self.waiting_on_move = False
-                if self.board.pawn_should_promote(move[2], move[3]):
-                    self.promotion_flag = True
-                    # wait for player to select promotion piece
-                    while self.promotion_piece is None:
-                        self.wait_for_promotion_flag = False
-                        sleep(1)
-                    self.board.promote(move[2], move[3], self.promotion_piece)
-                    move.append(self.promotion_piece)
 
                 # Send data to opposing player
                 if self.lan_match:
@@ -227,16 +236,16 @@ class GameManager:
 
     def _lan_listen(self):
         """ Background task to queue lan opponent's moves """
-        while not self.game_loop_interrupt:
+        while not self.game_loop_interrupt and self.winner is None:
             sleep(1)
             move = []
             try:
                 move_str = self.network_manager.receive_data()
-                if move_str == 'disconnect' or move_str == '':
-                    raise OSError('Connection lost')
-            except OSError:
-                # End game in draw if network interrupted
-                print('_lan_listen done')
+                if move_str in ('', 'disconnect'):
+                    raise OSError(f'Disconnected: ({move_str})')
+            except OSError as e:
+                # End game in if network interrupted
+                print('_lan_listen done: ', e)
                 self.winner = 'disconnect'
                 self.interrupt_game_loop()
                 return
@@ -252,7 +261,7 @@ class GameManager:
                     continue
             except TypeError:
                 continue
-            print(move)
+            print(f'opp move {move}')
             self.lan_opp_queue.put(move)
 
     def bot_move(self, color):
@@ -268,6 +277,9 @@ class GameManager:
         """ Resets board, winner, logs """
         self.board = Board()
         self.winner = None
+        self.turn = 'white'
+        self.game_loop_interrupt = False
+        self.waiting_on_move = False
         self.board_log = BoardLog()
         self.board_to_log = deepcopy(self.board)
 
