@@ -58,6 +58,7 @@ class ChessApp(tk.Tk):
     * Switches view to game board
     '''
     def start_game(self):
+        self.game_manager.reset()
         # import settings from menu frame
         white_player_status = self.menu_frame.get_player_status('white')
         black_player_status = self.menu_frame.get_player_status('black')
@@ -77,26 +78,16 @@ class ChessApp(tk.Tk):
         self.current_frame = self.board_canvas
         self.board_canvas.pack(fill='both', expand=True)
 
+        print(self.game_manager)
+
         self.board_canvas.start_game()
 
     def close(self):
-        print('******PRE-SHUTDOWN*********')
-        for thread in threading.enumerate():
-            is_problem = not thread.daemon and thread.name != "MainThread"
-            highlight = " <---- PROBLEM" if is_problem else ""
-            print(f'* Name: {thread.name}, is Daemon: {thread.daemon}{highlight}')
-        print('***************************')
         self.menu_frame.shutdown()
         self.board_canvas.kill_game_thread()
         self.server_manager.close_sockets()
         self.client_manager.close_sockets()
         self.destroy()
-        print('****POST-SHUTDOWN**********')
-        for thread in threading.enumerate():
-            is_problem = not thread.daemon and thread.name != "MainThread"
-            highlight = " <---- PROBLEM" if is_problem else ""
-            print(f'* Name: {thread.name}, is Daemon: {thread.daemon}{highlight}')
-        print('***************************')
 
 
 if __name__ == '__main__':

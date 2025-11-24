@@ -1,5 +1,6 @@
 import socket
 import re
+from time import time
 
 # Regular expression for verifying proper format for incoming broadcasts
 BROADCAST_PATTERN = re.compile(r"""
@@ -7,7 +8,7 @@ BROADCAST_PATTERN = re.compile(r"""
     :
     (?P<username>[0-9a-zA-Z]+)
     :
-    (?P<port>\d+)$
+    (?P<port>\d+)
     """, re.VERBOSE)
 
 class GameClient:
@@ -15,25 +16,28 @@ class GameClient:
     def __init__(self):
         self.broadcast_sock = None
         self.game_sock = None
-        self.establish_sockets()
 
         self.addr_book = {}
 
-    def establish_sockets(self):
+    def establish_sockets(self, sock_type='both'):
         """ Creates new socket for receiving UDP broadcast and TCP connection"""
         # establish socket to receive host broadcast
-        self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.broadcast_sock.settimeout(5)
-        self.broadcast_sock.bind(('', 50000))
+        if sock_type in ('udp', 'both'):
+            self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.broadcast_sock.settimeout(5)
+            self.broadcast_sock.bind(('', 50000))
 
         # socket for in game communication
-        self.game_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if sock_type in ('tcp', 'both'):
+            self.game_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def receive_broadcast(self):
         """ Receives UDP broadcasts and updates username and address book"""
+        self.establish_sockets('udp')
         try:
             data, address = self.broadcast_sock.recvfrom(1024)
+            # print(f'data: {data} from {address}')
         except AttributeError:
             return False
         except TimeoutError:
@@ -49,10 +53,19 @@ class GameClient:
         username = match.group('username')
         port = match.group('port')
 
-        if username not in self.addr_book:
-            # Add newly found user to address book
-            self.addr_book[username] = (address[0], int(port))
+        # Add/update user to address book
+        self.addr_book[username] = {'addr': (address[0], int(port)), 'time': time()}
+
         return True
+
+    def refresh_addr_book(self):
+        """ Removes stale usernames from the address book and returns it """
+        now = time()
+        for username in list(self.addr_book.keys()):
+            # User considered stale if broadcast was >5 seconds ago
+            if now - self.addr_book[username]['time'] > 5:
+                del self.addr_book[username]
+        return [host_user for host_user in self.addr_book]
 
     def get_users(self):
         """ Returns users in address book """
@@ -60,11 +73,14 @@ class GameClient:
 
     def connect(self, username):
         """ Connects to address associated with the username in the address book"""
+        self.establish_sockets('tcp')
         if username not in self.addr_book:
             return False
 
         try:
-            self.game_sock.connect(self.addr_book[username])
+            addr = self.addr_book[username]['addr']
+            print(f'Connecting to {self.addr_book[username]}')
+            self.game_sock.connect(addr)
         except OSError:
             return False
         try:
@@ -85,20 +101,22 @@ class GameClient:
         print(f'Client received {msg}')
         return msg
 
-
-    def close_sockets(self):
+    def close_sockets(self, sock_type='both'):
         result = [1, 1]
-        try:
-            if self.broadcast_sock is not None:
-                self.broadcast_sock.close()
-        except OSError:
-            result[0] = 0
-        try:
-            if self.game_sock is not None:
-                self.game_sock.shutdown(socket.SHUT_RDWR)
-                self.game_sock.close()
-        except OSError:
-            result[1] = 0
+        print(f'Closing {sock_type} client sockets')
+        if sock_type in ('udp', 'both'):
+            try:
+                if self.broadcast_sock is not None:
+                    self.broadcast_sock.close()
+            except OSError:
+                result[0] = 0
+        if sock_type in ('tcp', 'both'):
+            try:
+                if self.game_sock is not None:
+                    self.game_sock.shutdown(socket.SHUT_RDWR)
+                    self.game_sock.close()
+            except OSError:
+                result[1] = 0
         return result
 
     def __del__(self):

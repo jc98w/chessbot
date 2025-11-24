@@ -25,10 +25,6 @@ class GameManager:
         self.lan_opp_queue = queue.Queue()
         self.lan_listen_thread = None
 
-        self.promotion_piece = None
-        self.promotion_flag = False
-        self.wait_for_promotion_flag = False
-
         self.board_log = BoardLog()
         self.board_to_log = deepcopy(self.board)
 
@@ -91,14 +87,6 @@ class GameManager:
             return True
         else:
             return False
-        self.wait_for_promotion_flag = True
-        while self.wait_for_promotion_flag:
-            sleep(0.1)
-        return True if self.promotion_flag else False
-
-    def set_promotion(self, piece):
-        """ sets promotion_piece to let GameManager know what piece to promote to for pawns """
-        self.promotion_piece = piece
 
     def valid_squares(self, row, col):
         """ Returns list of valid squares for a given piece """
@@ -217,10 +205,6 @@ class GameManager:
                     for item in move:
                         move_str += str(item)
                     self.network_manager.send_data(move_str)
-
-                self.promotion_piece = None
-                self.promotion_flag = False
-                self.wait_for_promotion_flag = False
         return move
 
     def lan_move(self):
@@ -241,7 +225,7 @@ class GameManager:
             move = []
             try:
                 move_str = self.network_manager.receive_data()
-                if move_str in ('', 'disconnect'):
+                if move_str in ('disconnect', ''):
                     raise OSError(f'Disconnected: ({move_str})')
             except OSError as e:
                 # End game in if network interrupted
@@ -254,14 +238,15 @@ class GameManager:
                 for char in move_str[:4]:
                     if char.isnumeric():
                         move.append(ord(char) - ord('0'))
-                if len(move) == 5:
+                if len(move_str) == 5:
+                    print(f'{move_str[-1]}')
                     move.append(move_str[-1])
                 elif len(move) > 5:
                     # throw out bad move
                     continue
             except TypeError:
                 continue
-            print(f'opp move {move}')
+            print(f'opp move {move_str}:{move}')
             self.lan_opp_queue.put(move)
 
     def bot_move(self, color):
@@ -283,4 +268,7 @@ class GameManager:
         self.board_log = BoardLog()
         self.board_to_log = deepcopy(self.board)
 
+    def __str__(self):
+        return (f'*G*{self.turn}:{self.winner}:{self.white_player_type}:{self.black_player_type}\n'
+                f'*M*{self.move_queue.empty()}:{self.lan_opp_queue.empty()}:{self.waiting_on_move}:{self.game_loop_interrupt}')
 

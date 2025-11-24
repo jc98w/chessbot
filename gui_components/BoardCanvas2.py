@@ -190,6 +190,7 @@ class BoardCanvas2(tk.Canvas):
         return selected_piece.get()
 
     def end_dialog(self, winner, auto_restart=False):
+        """ Opens dialog box giving user option to rest or go back to menu """
         if auto_restart:
             self.reset()
         else:

@@ -19,6 +19,7 @@ class MenuFrame(tk.Frame):
         self.host_button = None
         self.username_box = None
         self.matches_listbox = None
+        self.hosting = False
 
         # Default to white being the player and black being a bot
         self.white_is_bot = tk.BooleanVar()
@@ -98,6 +99,9 @@ class MenuFrame(tk.Frame):
             Sets current_frame to options_frame when the menu is packed """
         tk.Frame.pack(self, *args, **kwargs)
         self.current_frame = self.options_frame
+        self.server_manager.close_sockets()
+        self.client_manager.close_sockets()
+        self.shutdown_flag = False
 
     def username_check(self, *args):
         """ Keeps username entry limited to 10 alphanumeric characters
@@ -113,12 +117,14 @@ class MenuFrame(tk.Frame):
 
     def set_frame(self, frame):
         """ unpacks current frame and packs selected frame """
+        self.hosting = False
         if self.current_frame is not None:
             self.current_frame.pack_forget()
         self.current_frame = frame
         self.current_frame.pack(fill='y', expand=True)
 
         if self.current_frame == self.lan_frame:
+            self.user_list.set([])
             self.udp_listen_thread = threading.Thread(target=self.check_for_opponents, daemon=True)
             self.udp_listen_thread.start()
         else:
@@ -144,15 +150,25 @@ class MenuFrame(tk.Frame):
     def check_for_opponents(self):
         """ Checks for UDP broadcasts from other users """
         while self.current_frame == self.lan_frame:
-            if self.client_manager.receive_broadcast():
-                for user in (self.client_manager.get_users()):
-                    if user != self.username.get() and user not in self.user_list.get():
-                        self.matches_listbox.insert(tk.END, user)
+            self.client_manager.receive_broadcast()
+            updated_list = self.client_manager.refresh_addr_book()
+            print(f'updated_list: {updated_list}')
+            username = self.username.get()
+            if username in updated_list:
+                updated_list.remove(username)
+            self.user_list.set(updated_list)
+        self.client_manager.close_sockets('udp')
 
     def host(self):
         """ Become game host """
+        # prevent redundant clicking
+        if self.hosting:
+            return
+        self.hosting = True
+
         username = self.username.get()
         self.server_manager.set_username(username)
+        self.server_manager.establish_sockets('tcp')
 
         self.udp_broadcast_thread = threading.Thread(target=self._host_thread, daemon=True)
         self.udp_broadcast_thread.start()
@@ -166,12 +182,13 @@ class MenuFrame(tk.Frame):
             self.event_generate('<<Connected>>', when='tail')
 
     def start_host_match(self, event):
-        """ Configure lan match as host and start game """
+        """ Configure lan match as host and start game
+            Called by <<Connected>> event """
         lan_opp_color = 'white' if self.white_player_status == 'lan_opp' else 'black'
         # Tell opponent what color they will play
+        print(f'sending {lan_opp_color} to client')
         self.server_manager.send_data(lan_opp_color)
         self.agent_type = 'host'
-        print('starting game as host...')
         self.start_match()
 
     def select_host(self, event):
@@ -183,10 +200,10 @@ class MenuFrame(tk.Frame):
         self.white_player_status = 'player' if client_color == 'white' else 'lan_opp'
         self.black_player_status = 'player' if client_color == 'black' else 'lan_opp'
         self.agent_type = 'client'
-        print('Starting game as client...')
         self.start_match()
 
     def shutdown(self):
         """ End check_for_opponent loop """
         self.shutdown_flag = True
+        self.matches_listbox.selection_clear(0, tk.END)
         self.set_frame(self.options_frame)
