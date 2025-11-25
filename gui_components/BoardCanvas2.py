@@ -58,7 +58,7 @@ class BoardCanvas2(tk.Canvas):
 
                     if self.game_manager.need_promotion(move):
                         move.append(self.ask_promotion_piece())
-                    print(move)
+                    print(f'Adding {move} to move queue')
                     self.game_manager.add_player_move(move)
                     self.cell_selected = None
                 else:
@@ -220,11 +220,15 @@ class BoardCanvas2(tk.Canvas):
                 tk.Button(dialog, text='Reset', command=close_dialog, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
             tk.Button(dialog, text='Menu', command=nav_to_menu, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
 
+            # position frame in middle of window
             x, y = self.winfo_width() // 2, self.winfo_height() // 2
             self.create_window((x, y), window=dialog)
 
+            dialog.wait_window()
+
     def start_game(self):
         """ Starts game thread and draw loop """
+        self.game_manager.reset()
         self.game_thread = threading.Thread(target=self.game_manager.game_loop, daemon=True)
         self.game_thread.start()
         self.after(100, self.draw_board)
@@ -234,6 +238,8 @@ class BoardCanvas2(tk.Canvas):
         self.game_manager.set_player_types(white, black)
 
     def reset(self):
+        """ Resets GUI - unselects cells and clears pieces """
+        self.cell_size = None
         delete_widgets = []
         for widget in self.widgets.keys():
             if 'p' in widget:
@@ -242,7 +248,6 @@ class BoardCanvas2(tk.Canvas):
                 delete_widgets.append(widget)
         for widget in delete_widgets:
             del self.widgets[widget]
-        self.game_manager.reset()
 
     def kill_game_thread(self):
         if self.game_thread is not None and self.game_thread.is_alive():

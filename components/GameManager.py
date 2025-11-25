@@ -112,10 +112,6 @@ class GameManager:
             while not self.move_queue.empty():
                 self.move_queue.get_nowait()
 
-            self.network_manager.send_data('start')
-            while self.network_manager.receive_data() != 'start':
-                continue
-
             self.lan_listen_thread = threading.Thread(target=self._lan_listen, daemon=True)
             self.lan_listen_thread.start()
 
@@ -152,11 +148,15 @@ class GameManager:
                 # Check for win
                 if self.board.in_checkmate(self.board.opposite_color(color)):
                     self.winner = color
+                    self.network_manager.send_data('game over')
                     print(f'Winner: {self.winner}')
         # Commit log in background
         threading.Thread(target=self.commit_log, daemon=True).start()
 
         return self.winner
+
+    def cont_lan_connection(self):
+        """ Keeps up lan connection to continue playing a lan opponent """
 
 
     def interrupt_game_loop(self):
@@ -225,6 +225,8 @@ class GameManager:
             move = []
             try:
                 move_str = self.network_manager.receive_data()
+                if move_str == 'game over':
+                    return
                 if move_str in ('disconnect', ''):
                     raise OSError(f'Disconnected: ({move_str})')
             except OSError as e:
@@ -238,6 +240,8 @@ class GameManager:
                 for char in move_str[:4]:
                     if char.isnumeric():
                         move.append(ord(char) - ord('0'))
+                    else:
+                        raise TypeError
                 if len(move_str) == 5:
                     print(f'{move_str[-1]}')
                     move.append(move_str[-1])

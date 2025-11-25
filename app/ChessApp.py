@@ -58,7 +58,7 @@ class ChessApp(tk.Tk):
     * Switches view to game board
     '''
     def start_game(self):
-        self.game_manager.reset()
+        # self.game_manager.reset()
         # import settings from menu frame
         white_player_status = self.menu_frame.get_player_status('white')
         black_player_status = self.menu_frame.get_player_status('black')
