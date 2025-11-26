@@ -82,8 +82,9 @@ class GameManager:
 
     def need_promotion(self, move):
         """ Returns true if player needs to promote a pawn """
+        print(f'{self.board.get_piece(move[0], move[1])}:{move}:{self.board.get_piece(move[2], move[3])}')
         if self.board.get_piece(move[0], move[1]) in ('p', 'P') \
-            and move[2] in (0, 7) and self.board.get_piece(move[2], move[3]) != '':
+            and move[2] in (0, 7) and self.board.get_piece(move[2], move[3]) == '':
             return True
         else:
             return False
@@ -148,7 +149,8 @@ class GameManager:
                 # Check for win
                 if self.board.in_checkmate(self.board.opposite_color(color)):
                     self.winner = color
-                    self.network_manager.send_data('game over')
+                    if self.lan_match:
+                        self.network_manager.send_data('game over')
                     print(f'Winner: {self.winner}')
         # Commit log in background
         threading.Thread(target=self.commit_log, daemon=True).start()
