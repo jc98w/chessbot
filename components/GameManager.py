@@ -82,10 +82,14 @@ class GameManager:
 
     def need_promotion(self, move):
         """ Returns true if player needs to promote a pawn """
-        print(f'{self.board.get_piece(move[0], move[1])}:{move}:{self.board.get_piece(move[2], move[3])}')
-        if self.board.get_piece(move[0], move[1]) in ('p', 'P') \
-            and move[2] in (0, 7) and self.board.get_piece(move[2], move[3]) == '':
-            return True
+        from_row, from_col, to_row, to_col = move
+        if self.board.get_piece(from_row, from_col) in ('p', 'P') and to_row in (0, 7):
+            if from_col == to_col and self.board.get_piece(to_row, to_col) == '':
+                return True
+            elif from_col != to_col and self.board.get_piece(to_row, to_col) != '':
+                return True
+            else:
+                return False
         else:
             return False
 
