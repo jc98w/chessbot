@@ -1,2 +1,6 @@
 # compiled python files
 *.pyc
+
+# Change based on python interpreter
+ChessBot.iml
+misc.xml
