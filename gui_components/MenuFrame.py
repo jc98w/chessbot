@@ -133,6 +133,8 @@ class MenuFrame(tk.Frame):
     def start_match(self):
         """ Exits menu and starts game """
         if self.current_frame == self. options_frame:
+            # starting non-network game
+            self.agent_type = None
             self.white_player_status = 'bot' if self.white_is_bot.get() else 'player'
             self.black_player_status = 'bot' if self.black_is_bot.get() else 'player'
         self.shutdown()
