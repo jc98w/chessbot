@@ -122,7 +122,10 @@ class GameManager:
             self.network_manager.send_data('new game')
             new_game_msg = ''
             while new_game_msg != 'new game':
-                new_game_msg = self.network_manager.receive_data()
+                try:
+                    new_game_msg = self.network_manager.receive_data()
+                except TimeoutError:
+                    continue
 
             print(f'network_manager: {self.network_manager.game_sock.getsockname()}')
             self.lan_listen_thread = threading.Thread(target=self._lan_listen, daemon=True)
