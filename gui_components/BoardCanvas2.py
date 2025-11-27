@@ -3,14 +3,12 @@ import threading
 import tkinter as tk
 from time import sleep
 
-from pyexpat.errors import messages
-
-from components.GameManager import GameManager
+from components.InfoBar import InfoBar
 
 LIGHT_SQUARE_COLOR = '#DEB887'
 DARK_SQUARE_COLOR = '#8B4513'
 MIN_SIZE = 200
-BOARDER_WIDTH = 10
+BOARDER_WIDTH = 30
 FONT = 'Arial'
 
 PIECE_ICONS = {'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
@@ -32,6 +30,30 @@ class BoardCanvas2(tk.Canvas):
 
         self.cell_selected = None
         self.bind("<Button-1>", self.on_left_click)
+        self.bind("<Configure>", self.on_resize)
+
+        self.height = 0
+        self.width = 0
+
+        self.info_bar = InfoBar(self)
+        self.info_window = self.create_window((0,0), anchor='s', window=self.info_bar)
+
+    def on_resize(self, event):
+        """ Adjusts sizes when window resizes """
+        self.update()
+        self.height = event.height
+        self.width = event.width
+
+        size = max(MIN_SIZE, min(self.width, self.height)) - BOARDER_WIDTH * 2
+        self.x_offset = BOARDER_WIDTH if self.width < self.height or size < MIN_SIZE else BOARDER_WIDTH + (self.width - self.height) // 2
+        self.y_offset = BOARDER_WIDTH
+        self.cell_size = size // 8
+        self.icon_size = int(self.cell_size * 0.7)
+
+        self.coords(self.info_window, (self.width // 2, self.height))
+        self.info_bar.set_font_size(self.icon_size // 4)
+        self.itemconfigure(self.info_window, width=self.width)
+        self.info_bar.configure(width=self.width, height=self.y_offset)
 
     def on_left_click(self, event):
         """ Resolves left mouse clicks for selecting pieces to move """
@@ -66,19 +88,10 @@ class BoardCanvas2(tk.Canvas):
 
     def draw_board(self):
         """" Draws the board and pieces on the Canvas. Highlights selected squares and available moves """
-        # Determine window size
-        self.update()
-        width = self.winfo_width()
-        height = self.winfo_height()
         # return in window is too small
-        if width < 50 or height < 50:
+        if self.width < 50 or self.height < 50:
             return
 
-        size = max(MIN_SIZE, min(width, height)) - BOARDER_WIDTH * 2
-        self.x_offset = BOARDER_WIDTH if width < height or size < MIN_SIZE else BOARDER_WIDTH + (width - height) // 2
-        self.y_offset = BOARDER_WIDTH
-        self.cell_size = size // 8
-        self.icon_size = int(self.cell_size * 0.7)
         label_size = int(self.cell_size * 0.15)
 
         # Identify highlighted squares
@@ -153,7 +166,9 @@ class BoardCanvas2(tk.Canvas):
                         self.delete(self.widgets[f'p{row}{col}'])
                         del self.widgets[f'p{row}{col}']
 
-        if not self.game_manager.winner:
+        self.info_bar.set_turn(self.game_manager.turn)
+
+        if self.game_manager.winner is None:
             # Redraw board if game is still running
             self.after(100, self.draw_board)
         else:
@@ -196,6 +211,7 @@ class BoardCanvas2(tk.Canvas):
         else:
             dialog = tk.Frame(self)
 
+            message = ''
             match winner:
                 case 'disconnect':
                     message = 'Connection lost'
@@ -231,15 +247,18 @@ class BoardCanvas2(tk.Canvas):
         self.game_manager.reset()
         self.game_thread = threading.Thread(target=self.game_manager.game_loop, daemon=True)
         self.game_thread.start()
+        print('Draw loop starting in 100ms')
         self.after(100, self.draw_board)
 
     def set_player_types(self, white='player', black='bot'):
         """ Sets player types as player, bot, or lan_opp """
         self.game_manager.set_player_types(white, black)
+        self.info_bar.set_player_types(white, black)
 
     def reset(self):
         """ Resets GUI - unselects cells and clears pieces """
-        self.cell_size = None
+        self.kill_game_thread()
+        self.cell_selected = None
         delete_widgets = []
         for widget in self.widgets.keys():
             if 'p' in widget:
@@ -252,3 +271,10 @@ class BoardCanvas2(tk.Canvas):
     def kill_game_thread(self):
         if self.game_thread is not None and self.game_thread.is_alive():
             self.game_manager.interrupt_game_loop()
+            self.game_thread.join()
+
+    def return_to_menu(self):
+        """ Called by InfoBar to return to main menu """
+        self.reset()
+        self.kill_game_thread()
+        self.parent.show_start_menu()

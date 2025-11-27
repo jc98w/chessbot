@@ -58,7 +58,8 @@ class ChessApp(tk.Tk):
     * Switches view to game board
     '''
     def start_game(self):
-        # self.game_manager.reset()
+        self.game_manager.reset()
+
         # import settings from menu frame
         white_player_status = self.menu_frame.get_player_status('white')
         black_player_status = self.menu_frame.get_player_status('black')
@@ -72,6 +73,7 @@ class ChessApp(tk.Tk):
             self.game_manager.set_network_manager(self.client_manager)
         else:
             self.game_manager.set_network_manager(None)
+            self.game_manager.lan_match = False
 
         # Switch frame to board frame
         self.hide_current_frame()

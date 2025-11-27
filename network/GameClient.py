@@ -1,5 +1,6 @@
 import socket
 import re
+import traceback
 from time import time
 
 # Regular expression for verifying proper format for incoming broadcasts
@@ -21,6 +22,7 @@ class GameClient:
 
     def establish_sockets(self, sock_type='both'):
         """ Creates new socket for receiving UDP broadcast and TCP connection"""
+        print(f'Client: Opening {sock_type} sockets')
         # establish socket to receive host broadcast
         if sock_type in ('udp', 'both'):
             self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -31,10 +33,10 @@ class GameClient:
         # socket for in game communication
         if sock_type in ('tcp', 'both'):
             self.game_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.game_sock.settimeout(1)
 
     def receive_broadcast(self):
         """ Receives UDP broadcasts and updates username and address book"""
-        self.establish_sockets('udp')
         try:
             data, address = self.broadcast_sock.recvfrom(1024)
             # print(f'data: {data} from {address}')
@@ -103,7 +105,7 @@ class GameClient:
 
     def close_sockets(self, sock_type='both'):
         result = [1, 1]
-        print(f'Closing {sock_type} client sockets')
+        print(f'Client: Closing {sock_type} sockets')
         if sock_type in ('udp', 'both'):
             try:
                 if self.broadcast_sock is not None:

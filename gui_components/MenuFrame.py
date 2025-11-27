@@ -149,10 +149,11 @@ class MenuFrame(tk.Frame):
 
     def check_for_opponents(self):
         """ Checks for UDP broadcasts from other users """
+        self.client_manager.establish_sockets('udp')
         while self.current_frame == self.lan_frame:
+            print('Checking for opponents')
             self.client_manager.receive_broadcast()
             updated_list = self.client_manager.refresh_addr_book()
-            print(f'updated_list: {updated_list}')
             username = self.username.get()
             if username in updated_list:
                 updated_list.remove(username)
@@ -195,6 +196,7 @@ class MenuFrame(tk.Frame):
         """ Connects to host from list of available matches """
         index = self.matches_listbox.curselection()
         host_user = self.matches_listbox.get(index)
+        self.matches_listbox.selection_clear(0, tk.END)
         self.client_manager.connect(host_user)
         client_color = self.client_manager.receive_data()
         self.white_player_status = 'player' if client_color == 'white' else 'lan_opp'
@@ -205,5 +207,4 @@ class MenuFrame(tk.Frame):
     def shutdown(self):
         """ End check_for_opponent loop """
         self.shutdown_flag = True
-        self.matches_listbox.selection_clear(0, tk.END)
         self.set_frame(self.options_frame)

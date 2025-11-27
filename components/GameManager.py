@@ -1,6 +1,7 @@
 import sys
 import queue
 import threading
+from _queue import Empty
 from copy import deepcopy
 from time import sleep
 
@@ -110,6 +111,7 @@ class GameManager:
         return [(-1, -1), 'safe']
 
     def game_loop(self):
+        print('starting new game loop ', self)
         if self.lan_match:
             # Start listening with a clean slate
             while not self.lan_opp_queue.empty():
@@ -117,10 +119,16 @@ class GameManager:
             while not self.move_queue.empty():
                 self.move_queue.get_nowait()
 
+            self.network_manager.send_data('new game')
+            new_game_msg = ''
+            while new_game_msg != 'new game':
+                new_game_msg = self.network_manager.receive_data()
+
+            print(f'network_manager: {self.network_manager.game_sock.getsockname()}')
             self.lan_listen_thread = threading.Thread(target=self._lan_listen, daemon=True)
             self.lan_listen_thread.start()
 
-        while self.winner is None:
+        while self.winner is None and not self.game_loop_interrupt:
             for color in ['white', 'black']:
                 if self.game_loop_interrupt:
                     # Ends game in event of window closing
@@ -143,7 +151,7 @@ class GameManager:
                         move = self.player_move()
                     elif player_type == 'lan_opp':
                         print('opp move')
-                        move =self.lan_move()
+                        move = self.lan_move()
                     else:
                         move = self.bot_move(color)
                     if move is not None:
@@ -161,20 +169,12 @@ class GameManager:
 
         return self.winner
 
-    def cont_lan_connection(self):
-        """ Keeps up lan connection to continue playing a lan opponent """
-
-
     def interrupt_game_loop(self):
-        """ Ends game loop with interrupt flag
-            Disconnects TCP socket in lan matches """
-        if self.lan_match:
-            try:
-                self.network_manager.send_data('disconnect')
-            except OSError:
-                pass
+        """ Ends game loop with interrupt flag """
         self.game_loop_interrupt = True
         self.waiting_on_move = False
+        if self.lan_listen_thread is not None and self.lan_listen_thread.is_alive():
+            self.lan_listen_thread.join()
 
     def commit_log(self):
         # Commit log to database
@@ -198,9 +198,12 @@ class GameManager:
         """ Waits to receive move from player """
         self.waiting_on_move = True
         move = None
-        while self.waiting_on_move:
+        while self.waiting_on_move and not self.game_loop_interrupt:
             # Retrieve move from queue
-            move = self.move_queue.get()
+            try:
+                move = self.move_queue.get(timeout=1)
+            except Empty:
+                continue
 
             if self.board.move_piece(*move):
                 self.waiting_on_move = False
@@ -217,29 +220,38 @@ class GameManager:
         """ Waits to receive move from lan opponent """
         self.waiting_on_move = True
         move = []
-        while self.waiting_on_move:
-            move = self.lan_opp_queue.get()
+        while self.waiting_on_move and not self.game_loop_interrupt:
+            try:
+                move = self.lan_opp_queue.get(timeout=1)
+            except Empty:
+                continue
             if self.board.move_piece(*move):
                 self.waiting_on_move = False
 
-        return move
+        return None if move == [] else move
 
     def _lan_listen(self):
         """ Background task to queue lan opponent's moves """
         while not self.game_loop_interrupt and self.winner is None:
-            sleep(1)
             move = []
             try:
                 move_str = self.network_manager.receive_data()
                 if move_str == 'game over':
+                    print('_lan_listen done: game over')
                     return
-                if move_str in ('disconnect', ''):
-                    raise OSError(f'Disconnected: ({move_str})')
-            except OSError as e:
-                # End game in if network interrupted
-                print('_lan_listen done: ', e)
-                self.winner = 'disconnect'
-                self.interrupt_game_loop()
+                # '' is a disconnect message
+                elif move_str == '':
+                    print('_lan_listen done: disconnect')
+                    self.winner = 'disconnect'
+                    self.game_loop_interrupt = True
+                    self.waiting_on_move = False
+                    return
+            except TimeoutError:
+                continue
+            except OSError:
+                self.winner = 'error'
+                self.game_loop_interrupt = True
+                self.waiting_on_move = False
                 return
 
             try:
@@ -256,7 +268,7 @@ class GameManager:
                     continue
             except TypeError:
                 continue
-            print(f'opp move {move_str}:{move}')
+            print(f'opp\'s move: {move_str}:{move}')
             self.lan_opp_queue.put(move)
 
     def bot_move(self, color):
@@ -270,8 +282,8 @@ class GameManager:
 
     def reset(self):
         """ Resets board, winner, logs """
-        self.board = Board()
         self.winner = None
+        self.board = Board()
         self.turn = 'white'
         self.game_loop_interrupt = False
         self.waiting_on_move = False
@@ -281,4 +293,3 @@ class GameManager:
     def __str__(self):
         return (f'*G*{self.turn}:{self.winner}:{self.white_player_type}:{self.black_player_type}\n'
                 f'*M*{self.move_queue.empty()}:{self.lan_opp_queue.empty()}:{self.waiting_on_move}:{self.game_loop_interrupt}')
-

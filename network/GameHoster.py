@@ -1,3 +1,4 @@
+import traceback
 from random import randint
 import socket
 from time import sleep
@@ -23,7 +24,7 @@ class GameHoster:
 
     def establish_sockets(self, sock_type='both'):
         """ Establishes UDP and TCP sockets"""
-        print(f'Opening {sock_type} server sockets')
+        print(f'Host: Opening {sock_type} server sockets')
         # UDP broadcasting socket to make host visible on local network
         if sock_type in ('udp', 'both'):
             self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -73,6 +74,7 @@ class GameHoster:
             self.game_sock.listen()
             print('host awaiting connection')
             self.client_sock, cli_addr = self.game_sock.accept()
+            self.client_sock.settimeout(1)
             print('host connected')
         except OSError:
             self.close_sockets()
@@ -93,7 +95,7 @@ class GameHoster:
         self.client_sock.send(data.encode('utf-8'))
 
     def close_sockets(self, sock_type='both'):
-        print(f'Closing {sock_type} server sockets')
+        print(f'Host: Closing {sock_type} sockets')
         result = [1, 1, 1]
         if sock_type in ('udp', 'both'):
             try:
