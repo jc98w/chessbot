@@ -2,6 +2,8 @@
 Moves are stored in SQLite table.
 Table book
 Columns board_id (int primary key), moves (varchar)
+* Book moves input in database are referenced from
+* Silman, J. (1998). 'The Complete Book of Chess Strategy: GrandMaster Techniques from A to Z' Siles Press
 """
 import re
 import sqlite3
