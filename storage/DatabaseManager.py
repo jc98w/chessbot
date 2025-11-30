@@ -6,15 +6,10 @@ from pymongo.server_api import ServerApi
 from storage.BoardLog import BoardLog
 
 class DatabaseManager:
-    def __init__(self, username, password, host='chesscluster.pnlwyv0.mongodb.net', extension='?retryWrites=true&w=majority&appName=ChessCluster'):
-        self.username = username
-        self.password = password
-        self.host = host
-        self.extension = extension
+    def __init__(self):
+        uri = 'mongodb://localhost:27017/'
 
-        uri = f'mongodb+srv://{username}:{password}@{host}/{extension}'
-
-        self.client = MongoClient(uri, server_api=ServerApi('1'))
+        self.client = MongoClient(uri)
         self.db = self.client.chess
         self.collection = self.db['bot_one_data']
 
@@ -86,10 +81,10 @@ class DatabaseManager:
             return False
 
 if __name__ == '__main__':
-    db = DatabaseManager(sys.argv[1], sys.argv[2])
+    db = DatabaseManager()
     if db.ping():
         print('Successful connection to MongoDB')
-        print(db.read({'board':'bubble'}))
+        print(db.read({'board':'rnbqkbnrpppppppp32PPPPPPPPRNBQKBNRKQkq'}))
     else:
         print('Failed to connect to MongoDB')
 

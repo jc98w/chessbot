@@ -10,9 +10,7 @@ from storage.BoardLog import BoardLog
 if __name__ == '__main__':
     try:
         print('Connecting to database...', end='')
-        if len(sys.argv) < 2:
-            raise Exception('Database credentials not provided')
-        db_manager = DatabaseManager(sys.argv[1], sys.argv[2])
+        db_manager = DatabaseManager()
         if db_manager.ping():
             print('Connection successful')
         else:
