@@ -1,9 +1,10 @@
 import random
 from copy import deepcopy, copy
-
+from storage.BookMoveManager import BookMoveManager, convert_move
 
 class ChessBot:
     def __init__(self, db_manager):
+        self.book = BookMoveManager()
         self.db_manager = db_manager
         self.board = None
         self.color = None
@@ -14,19 +15,33 @@ class ChessBot:
         self.color = color
         self.piece_locations = self.board.get_piece_locations(self.color)
 
-        move_method = 'checkmate'
-        move = self.search_for_checkmate()
+        move_method = 'book'
+        move = self.get_book_move()
         if move is None:
-            move_method = 'db move'
-            move = self.pick_best_db_move()
+            move_method = 'checkmate'
+            move = self.search_for_checkmate()
             if move is None:
-                move_method = 'weighted random'
-                move = self.pick_weighted_random_move()
+                move_method = 'db move'
+                move = self.pick_best_db_move()
                 if move is None:
-                    move_method = 'random'
-                    move = self.pick_random_move()
+                    move_method = 'weighted random'
+                    move = self.pick_weighted_random_move()
+                    if move is None:
+                        move_method = 'random'
+                        move = self.pick_random_move()
+        print(f'Bot move method: {move_method}')
 
         return move
+
+    def get_book_move(self):
+        """ Selects and returns a book move """
+        self.book.connect()
+        moves = self.book.get_moves(self.board.create_board_str())
+        self.book.close()
+        if moves is None:
+            return None
+        chosen_move = random.choice(moves)
+        return convert_move(self.board, chosen_move, self.color)
 
     def pick_random_move(self):
         random.shuffle(self.piece_locations)
