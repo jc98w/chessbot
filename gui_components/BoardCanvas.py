@@ -1,349 +1,280 @@
 import queue
-import sys
 import threading
-from copy import deepcopy
-from pprint import pprint
-from tkinter import Canvas, Toplevel, StringVar, Frame, Button, Label
+import tkinter as tk
+from time import sleep
 
-from components.Board import Board
-from components.ChessBot import ChessBot
-from storage.BoardLog import BoardLog
-from storage.DatabaseManager import DatabaseManager
+from components.InfoBar import InfoBar
 
-LIGHT_COLOR = '#DEB887'
-DARK_COLOR = '#8B4513'
-FONT = 'Arial'
+LIGHT_SQUARE_COLOR = '#DEB887'
+DARK_SQUARE_COLOR = '#8B4513'
 MIN_SIZE = 200
-BORDER_WIDTH = 10
+BOARDER_WIDTH = 30
+FONT = 'Arial'
 
 PIECE_ICONS = {'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
                'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'}
 
-class BoardCanvas(Canvas):
+class BoardCanvas2(tk.Canvas):
 
     def __init__(self, parent, *args, **kwargs):
-        Canvas.__init__(self, parent, *args, **kwargs)
+        tk.Canvas.__init__(self, parent, *args, **kwargs)
         self.parent = parent
-        self.board = Board()
-        try:
-            print('Connecting to database...', end='')
-            if len(sys.argv) < 2:
-                raise Exception('Database credentials not provided')
-            self.db_manager = DatabaseManager(sys.argv[1], sys.argv[2])
-            if self.db_manager.ping():
-                print('Connection successful')
-            else:
-                raise Exception('Unable to connect to database')
-        except Exception as e:
-            print(e)
-            self.db_manager = None
-        self.bot = ChessBot(self.db_manager)
-        self.bot_move_delay = 1000
-        self.bot_move_queue = queue.Queue()
-        self.bot_thread = None
-        self.is_white_bot = False
-        self.is_black_bot = True
+        self.game_manager = parent.game_manager
+        self.game_thread = None
 
-        self.board_log = BoardLog()
-        self.board_to_log = deepcopy(self.board)
         self.cell_size = 1
         self.x_offset = 1
         self.y_offset = 1
         self.icon_size = 1
+        self.widgets = {}
 
-        self.turn = 'white'
-        self.winner = None
-        self.is_auto_restart = False
         self.cell_selected = None
-        self.bind("<Configure>", self.on_resize)
         self.bind("<Button-1>", self.on_left_click)
+        self.bind("<Configure>", self.on_resize)
+
+        self.height = 0
+        self.width = 0
+
+        self.info_bar = InfoBar(self)
+        self.info_window = self.create_window((0,0), anchor='s', window=self.info_bar)
 
     def on_resize(self, event):
-        self.delete('all')
-        self.draw_board()
-
-    def set_bots(self, white=False, black=True):
-        self.is_white_bot = white
-        self.is_black_bot = black
-        self.trigger_bot_move()
-
-    def is_bot(self, color):
-        return self.is_white_bot if color == 'white' else self.is_black_bot
-
-    def on_left_click(self, event):
-        # Do nothing if it is a bot's turn
-        if self.is_bot(self.turn):
-            return
-
-        mouse_x = event.x
-        mouse_y = event.y
-        col = (mouse_x - self.x_offset) // self.cell_size
-        row = (mouse_y - self.y_offset) // self.cell_size
-        if 0 <= row <= 7 and 0 <= col <= 7:
-            selected_piece = self.board.get_piece(row, col)
-
-            if self.cell_selected is None:
-                if selected_piece != '' and self.board.get_color(selected_piece) == self.turn:
-                    self.cell_selected = (row, col)
-                else:
-                    return
-            else:
-                move = (self.cell_selected[0], self.cell_selected[1], row, col)
-                if self.board.move_piece(*move):
-                    if self.board.pawn_should_promote(row, col):
-                        promotion_piece = self.ask_promotion_piece(color=self.turn)
-                        if promotion_piece is None:
-                            promotion_piece = 'q'
-                        move += (promotion_piece,)
-                        self.board.promote(row, col, promotion_piece)
-                    self.board_log.add_entry(self.board_to_log, *move)
-                    self.board_to_log = deepcopy(self.board)
-                    self.cell_selected = None
-                    self.swap_turn()
-                elif selected_piece != '' and self.board.get_color(selected_piece) == self.turn:
-                    self.cell_selected = (row, col)
-        else:
-            self.cell_selected = None
-
-        self.draw_board()
-        self.trigger_bot_move()
-
-    def swap_turn(self):
-        if self.turn == 'white':
-            self.turn = 'black'
-        else:
-            self.turn = 'white'
-
-    def draw_board(self):
-        # Determine sizing
+        """ Adjusts sizes when window resizes """
         self.update()
-        width = self.winfo_width()
-        height = self.winfo_height()
-        # return if too small
-        if width < 50 or height < 50:
-            return
+        self.height = event.height
+        self.width = event.width
 
-        size = max(MIN_SIZE, min(width, height)) - BORDER_WIDTH * 2
-        self.x_offset = BORDER_WIDTH if width < height or size < MIN_SIZE else BORDER_WIDTH + (width - height) // 2
-        self.y_offset = BORDER_WIDTH
+        size = max(MIN_SIZE, min(self.width, self.height)) - BOARDER_WIDTH * 2
+        self.x_offset = BOARDER_WIDTH if self.width < self.height or size < MIN_SIZE else BOARDER_WIDTH + (self.width - self.height) // 2
+        self.y_offset = BOARDER_WIDTH
         self.cell_size = size // 8
         self.icon_size = int(self.cell_size * 0.7)
+
+        self.coords(self.info_window, (self.width // 2, self.height))
+        self.info_bar.set_font_size(self.icon_size // 4)
+        self.itemconfigure(self.info_window, width=self.width)
+        self.info_bar.configure(width=self.width, height=self.y_offset)
+
+    def on_left_click(self, event):
+        """ Resolves left mouse clicks for selecting pieces to move """
+        if self.game_manager.is_players_turn():
+            mouse_x = event.x
+            mouse_y = event.y
+            col = (mouse_x - self.x_offset) // self.cell_size
+            row = (mouse_y - self.y_offset) // self.cell_size
+
+            valid_moves =[]
+            if self.cell_selected is not None:
+                valid_moves = self.game_manager.valid_squares(*self.cell_selected)
+
+            if 0 <= row <= 7 and 0 <= col <= 7:
+                # Click was within the board boundaries
+                if self.cell_selected is None:
+                    # First click (selecting piece)
+                    if self.game_manager.good_piece_selection(row, col):
+                        # Valid piece
+                        self.cell_selected = (row, col)
+                elif (row, col) in valid_moves:
+                    # Destination selecting click
+                    move = [self.cell_selected[0], self.cell_selected[1], row, col]
+
+                    if self.game_manager.need_promotion(move):
+                        move.append(self.ask_promotion_piece())
+                    print(f'Adding {move} to move queue')
+                    self.game_manager.add_player_move(move)
+                    self.cell_selected = None
+                else:
+                    self.cell_selected = None
+
+    def draw_board(self):
+        """" Draws the board and pieces on the Canvas. Highlights selected squares and available moves """
+        # return in window is too small
+        if self.width < 50 or self.height < 50:
+            return
+
         label_size = int(self.cell_size * 0.15)
 
-        winner = None
-        if self.board_log.get_draw_status() or self.board.is_stalemate(self.turn):
-            winner = 'draw'
-        else:
-            # Draw board
-            for row in range(8):
-                for col in range(8):
-                    # Draw squares
-                    color = LIGHT_COLOR if (row + col) % 2 == 0 else DARK_COLOR
-                    x1 = col * self.cell_size + self.x_offset
-                    y1 = row * self.cell_size + self.y_offset
-                    x2 = x1 + self.cell_size
-                    y2 = y1 + self.cell_size
-                    if self.cell_selected is not None:
-                        selected_row = self.cell_selected[0]
-                        selected_col = self.cell_selected[1]
-                        if row == selected_row and col == selected_col:
-                            color = 'white'
-                        if (row, col) in self.board.get_valid_moves(selected_row, selected_col):
-                            color = 'lightgrey'
-                    if (row, col) == self.board.white_king_loc:
-                        if self.board.in_check('white'):
-                            color = 'red'
-                            if self.board.in_checkmate('white'):
-                                winner = 'black'
-                    elif (row, col) == self.board.black_king_loc:
-                        if self.board.in_check('black'):
-                            color = 'red'
-                            if self.board.in_checkmate('black'):
-                                winner = 'white'
+        # Identify highlighted squares
+        selected_row, selected_col, valid_squares_list = None, None, []
+        if self.cell_selected is not None:
+            selected_row = self.cell_selected[0]
+            selected_col = self.cell_selected[1]
+            valid_squares_list = self.game_manager.valid_squares(selected_row, selected_col)
+        checked_king_loc, check_status = self.game_manager.get_checked_king_loc()
 
-                    self.create_rectangle(x1, y1, x2, y2, fill=color)
+        for row in range(8):
+            for col in range(8):
+                color = LIGHT_SQUARE_COLOR if (row + col) % 2 == 0 else DARK_SQUARE_COLOR
+                # Square coordinates
+                x1 = col * self.cell_size + self.x_offset
+                y1 = row * self.cell_size + self.y_offset
+                x2 = x1 + self.cell_size
+                y2 = y1 + self.cell_size
 
-                    # Draw rank and file labels
-                    if row == 7:
-                        x_label = x1 + int(self.cell_size * 0.9)
-                        y_label = y1 + int(self.cell_size * 0.9)
-                        self.create_text(x_label, y_label, text=chr(ord('a') + col), font=(FONT, label_size), fill='black')
-
-                    if col == 0:
-                        x_label = x1 + int(self.cell_size * 0.1)
-                        y_label = y1 + int(self.cell_size * 0.1)
-                        self.create_text(x_label, y_label, text=str(8 - row), font=(FONT, label_size), fill='black')
-
-                    # Draw pieces
-                    piece = self.board.get_piece(row, col)
-                    if piece != '':
-                        center_x = x1 + self.cell_size // 2
-                        center_y = y1 + self.cell_size // 2
-                        piece_icon = PIECE_ICONS[piece]
-                        self.create_text(center_x, center_y, text=piece_icon, font=(FONT, self.icon_size), fill='black')
-        if winner is not None:
-            self._start_commit_log_thread(winner)
-            self.end_dialog(winner, self.is_auto_restart)
-
-    def _start_commit_log_thread(self, winner):
-        commit_thread = threading.Thread(target=self._commit_log_async, args=(winner,), daemon=False)
-        commit_thread.start()
-        print('Started commit log thread')
-
-    def _commit_log_async(self, winner):
-        if self.db_manager:
-            try:
-                log_to_commit = deepcopy(self.board_log)
-                success = self.db_manager.commit_log(log_to_commit, winner)
-                if success:
-                    print('Background thread: Log commited successfully')
+                if (row, col) == (selected_row, selected_col):
+                    color = 'white'
+                elif (row, col) in valid_squares_list:
+                    color = 'lightgrey'
+                elif (row, col) == checked_king_loc:
+                    if check_status == 'check':
+                        color = 'red'
+                    elif check_status == 'mate':
+                        color = 'black'
+                if f's{row}{col}' not in self.widgets:
+                    # create new squares on first draw - s for square
+                    self.widgets[f's{row}{col}'] = self.create_rectangle(x1, y1, x2, y2, fill=color)
                 else:
-                    print('Background thread: Failed to commit (check DatabaseManager errors')
-            except Exception as e:
-                print(f'Background thread error during commit_log: {e}')
-                import traceback
-                traceback.print_exc()
-        else:
-            print("Background thread: DatabaseManager not initialized, unable to commit")
+                    # update squares on subsequent draws
+                    self.coords(self.widgets[f's{row}{col}'], x1, y1, x2, y2)
+                    self.itemconfig(self.widgets[f's{row}{col}'], fill=color)
 
-    def reset(self):
-        self.board = Board()
-        self.cell_selected = None
-        self.winner = None
-        self.turn = 'white'
-        self.board_log = BoardLog()
-        self.board_to_log = deepcopy(self.board)
-        self.draw_board()
-        self.trigger_bot_move()
+                # Draw rank and file labels
+                if row == 7:
+                    x_label = x1 + int(self.cell_size * 0.9)
+                    y_label = y1 + int(self.cell_size * 0.9)
+                    if f'fl{col}' not in self.widgets:
+                        # create new labels if not yet existent - fl for file label
+                        self.widgets[f'fl{col}'] = self.create_text(x_label, y_label, text=chr(ord('a') + col), font=(FONT, label_size), fill='black')
+                    else:
+                        self.coords(self.widgets[f'fl{col}'], x_label, y_label)
+                if col == 0:
+                    x_label = x1 + int(self.cell_size * 0.1)
+                    y_label = y1 + int(self.cell_size * 0.1)
+                    if f'rl{row}' not in self.widgets:
+                        # new labels on first draw - rl for rank label
+                        self.widgets[f'rl{row}'] = self.create_text(x_label, y_label, text=str(8 - row), font=(FONT, label_size), fill='black')
+                    else:
+                        self.coords(self.widgets[f'rl{row}'], x_label, y_label)
+
+                # Draw Pieces
+                piece = self.game_manager.get_piece(row, col)
+                if piece != '':
+                    center_x = x1 + self.cell_size // 2
+                    center_y = y1 + self.cell_size // 2
+                    piece_icon = PIECE_ICONS[piece]
+
+                    if f'p{row}{col}' not in self.widgets:
+                        # Piece on square and no piece draw -> draw new piece
+                        self.widgets[f'p{row}{col}'] = self.create_text(center_x, center_y, text=piece_icon, font=(FONT, self.icon_size), fill='black')
+                    else:
+                        # update drawn piece on that square
+                        self.itemconfig(self.widgets[f'p{row}{col}'], text=piece_icon, font=(FONT, self.icon_size))
+                        self.coords(self.widgets[f'p{row}{col}'], center_x, center_y)
+                else:
+                    # No piece on the square - check for drawn piece and delete if necessary
+                    if f'p{row}{col}' in self.widgets:
+                        self.delete(self.widgets[f'p{row}{col}'])
+                        del self.widgets[f'p{row}{col}']
+
+        self.info_bar.set_turn(self.game_manager.turn)
+
+        if self.game_manager.winner is None:
+            # Redraw board if game is still running
+            self.after(100, self.draw_board)
+        else:
+            # game has ended
+            self.end_dialog(self.game_manager.winner)
 
     def ask_promotion_piece(self, color='white'):
-        dialog = Toplevel(self)
-        dialog.overrideredirect(True)
-        # dialog.transient(self.winfo_toplevel())
-
-        # dialog.resizable(False, False)
+        """ Opens a dialog box to ask what to promote a pawn to """
+        dialog = tk.Frame(self)
         dialog.config(bd=2, relief='raised')
 
-        chosen_piece = StringVar(dialog)
-
-        button_frame = Frame(dialog, padx=10, pady=10)
+        button_frame = tk.Frame(dialog, padx=10, pady=10)
         button_frame.pack()
 
         pieces = ['q', 'r', 'b', 'n']
+        selected_piece = queue.Queue()
 
         def on_select(piece_code):
-            chosen_piece.set(piece_code)
-            dialog.grab_release()
             dialog.destroy()
+            selected_piece.put(piece_code)
+            default_piece = 'Q' if color == 'white' else 'q'
+            print(f'Returning {piece_code}')
+            return piece_code if piece != '' else default_piece
 
         for piece in pieces:
             piece = piece.upper() if color == 'white' else piece
-            Button(button_frame, text=PIECE_ICONS[piece], font=(FONT, int(self.icon_size * 0.75)), command=lambda p=piece: on_select(p))\
+            tk.Button(button_frame, text=PIECE_ICONS[piece], font=(FONT, int(self.icon_size * 0.75)), command=lambda p=piece: on_select(p))\
                 .pack(side='left', padx=10, pady=10)
 
-        dialog.update_idletasks()
-        parent_window = self.winfo_toplevel()
-        parent_x = parent_window.winfo_rootx()
-        parent_y = parent_window.winfo_rooty()
-        parent_width = parent_window.winfo_width()
-        parent_height = parent_window.winfo_height()
+        x, y = self.winfo_width() // 2, self.winfo_height() // 2
+        self.create_window((x, y), window=dialog)
 
-        dialog_width = dialog.winfo_width()
-        dialog_height = dialog.winfo_height()
-
-        x = parent_x + (parent_width // 2) - (dialog_width // 2)
-        y = parent_y + (parent_height // 2) - (dialog_height // 2)
-        dialog.geometry(f'+{x}+{y}')
-
-        dialog.after_idle(dialog.grab_set)
-        # dialog.protocol("WM_DELETE_WINDOW", lambda: on_select('q'))
         dialog.wait_window()
-
-        result = chosen_piece.get()
-        default_piece = 'Q' if color == 'white' else 'q'
-        return result if result != '' else default_piece
-
-    def set_auto_restart(self, auto_restart):
-        self.is_auto_restart = auto_restart
+        return selected_piece.get()
 
     def end_dialog(self, winner, auto_restart=False):
+        """ Opens dialog box giving user option to rest or go back to menu """
         if auto_restart:
-            print('Auto restart')
             self.reset()
         else:
-            dialog = Toplevel(self)
-            dialog.overrideredirect(True)
+            dialog = tk.Frame(self)
 
-            message = f'{winner.capitalize()} wins!' if winner != 'draw' else 'Draw!'
-            msg_lbl = Label(dialog, text=message, font=(FONT, int(self.icon_size * 0.75)))
+            message = ''
+            match winner:
+                case 'disconnect':
+                    message = 'Connection lost'
+                case 'draw':
+                    message = 'Draw!'
+                case _:
+                    message = f'{winner.capitalize()} wins!'
+            msg_lbl = tk.Label(dialog, text=message, font=(FONT, int(self.icon_size * 0.75)))
             msg_lbl.pack(pady=10)
 
-            def close():
+            def close_dialog():
                 self.reset()
-                dialog.grab_release()
                 dialog.destroy()
+                self.start_game()
 
-            def menu():
-                close()
+            def nav_to_menu():
+                self.reset()
+                dialog.destroy()
                 self.parent.show_start_menu()
 
-            Button(dialog, text='Reset', command=close, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
-            Button(dialog, text='Menu', command=menu, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
+            if winner != 'disconnect':
+                tk.Button(dialog, text='Reset', command=close_dialog, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
+            tk.Button(dialog, text='Menu', command=nav_to_menu, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
 
-            dialog.update_idletasks()
-            parent_window = self.winfo_toplevel()
-            parent_x = parent_window.winfo_rootx()
-            parent_y = parent_window.winfo_rooty()
-            parent_width = parent_window.winfo_width()
-            parent_height = parent_window.winfo_height()
-
-            dialog_width = dialog.winfo_width()
-            dialog_height = dialog.winfo_height()
-
-            x = parent_x + (parent_width // 2) - (dialog_width // 2)
-            y = parent_y + (parent_height // 2) - (dialog_height // 2)
-            dialog.geometry(f'+{x}+{y}')
-
-            dialog.protocol('WM_DELETE_WINDOW', close)
-
-            dialog.after_idle(dialog.grab_set)
+            # position frame in middle of window
+            x, y = self.winfo_width() // 2, self.winfo_height() // 2
+            self.create_window((x, y), window=dialog)
 
             dialog.wait_window()
 
-    def trigger_bot_move(self):
-        if self.winner is None and self.is_bot(self.turn) and (self.bot_thread is None or not self.bot_thread.is_alive()):
-            board_copy = deepcopy(self.board)
-            self.bot_thread = threading.Thread(target=self._run_bot_decision, args=(board_copy, self.turn, self.bot_move_queue), daemon=False)
-            self.bot_thread.start()
+    def start_game(self):
+        """ Starts game thread and draw loop """
+        self.game_manager.reset()
+        self.game_thread = threading.Thread(target=self.game_manager.game_loop, daemon=True)
+        self.game_thread.start()
+        print('Draw loop starting in 100ms')
+        self.after(100, self.draw_board)
 
-            self.after(self.bot_move_delay, self._check_bot_queue)
+    def set_player_types(self, white='player', black='bot'):
+        """ Sets player types as player, bot, or lan_opp """
+        self.game_manager.set_player_types(white, black)
+        self.info_bar.set_player_types(white, black)
 
-    def _run_bot_decision(self, board_instance, color, result_queue):
-            try:
-                bot_move = self.bot.decide_move(board_instance, color)
-                result_queue.put(bot_move)
-            except Exception as e:
-                print(f'Bot thread error: {e}')
-                import traceback
-                traceback.print_exc()
-                result_queue.put(None)
+    def reset(self):
+        """ Resets GUI - unselects cells and clears pieces """
+        self.kill_game_thread()
+        self.cell_selected = None
+        delete_widgets = []
+        for widget in self.widgets.keys():
+            if 'p' in widget:
+                # a 'p' in a widget key indicates the widget is a piece
+                self.delete(self.widgets[widget])
+                delete_widgets.append(widget)
+        for widget in delete_widgets:
+            del self.widgets[widget]
 
-    def _check_bot_queue(self):
-        try:
-            bot_move = self.bot_move_queue.get_nowait()
-            if bot_move is not None:
-                if self.board.move_piece(*bot_move):
-                    self.board_log.add_entry(self.board_to_log, *bot_move)
-                    self.board_to_log = deepcopy(self.board)
-                    self.swap_turn()
-                    self.draw_board()
-                    self.trigger_bot_move()
-                else:
-                    print(f'Bot returned bad move: {bot_move}')
-                    self.trigger_bot_move()
-            else:
-                print(f'Bot returned None')
-        except queue.Empty:
-            if self.bot_thread is not None and self.bot_thread.is_alive():
-                self.after(self.bot_move_delay, self._check_bot_queue)
+    def kill_game_thread(self):
+        if self.game_thread is not None and self.game_thread.is_alive():
+            self.game_manager.interrupt_game_loop()
+            self.game_thread.join()
 
+    def return_to_menu(self):
+        """ Called by InfoBar to return to main menu """
+        self.reset()
+        self.kill_game_thread()
+        self.parent.show_start_menu()

@@ -2,7 +2,7 @@ import threading
 import tkinter as tk
 
 from components.GameManager import GameManager
-from gui_components.BoardCanvas2 import BoardCanvas2
+from gui_components.BoardCanvas import BoardCanvas2
 from gui_components.MenuFrame import MenuFrame
 from network.GameClient import GameClient
 from network.GameHoster import GameHoster
