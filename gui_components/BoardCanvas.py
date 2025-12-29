@@ -21,6 +21,7 @@ class BoardCanvas2(tk.Canvas):
         self.parent = parent
         self.game_manager = parent.game_manager
         self.game_thread = None
+        self.drawing = True
 
         self.cell_size = 1
         self.x_offset = 1
@@ -88,6 +89,10 @@ class BoardCanvas2(tk.Canvas):
 
     def draw_board(self):
         """" Draws the board and pieces on the Canvas. Highlights selected squares and available moves """
+        # check if should be drawing
+        if not self.drawing:
+            return
+
         # return in window is too small
         if self.width < 50 or self.height < 50:
             return
@@ -206,6 +211,8 @@ class BoardCanvas2(tk.Canvas):
 
     def end_dialog(self, winner, auto_restart=False):
         """ Opens dialog box giving user option to rest or go back to menu """
+        self.drawing = False
+
         if auto_restart:
             self.reset()
         else:
@@ -247,7 +254,7 @@ class BoardCanvas2(tk.Canvas):
         self.game_manager.reset()
         self.game_thread = threading.Thread(target=self.game_manager.game_loop, daemon=True)
         self.game_thread.start()
-        print('Draw loop starting in 100ms')
+        self.drawing = True
         self.after(100, self.draw_board)
 
     def set_player_types(self, white='player', black='bot'):
