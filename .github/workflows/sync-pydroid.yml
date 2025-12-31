@@ -1,4 +1,4 @@
-# This automatically takes commits to main and commits them to the Pydroid class
+# This automatically takes commits to main and commits them to the Pydroid branch
 # The contents of the 'app' directory need to be emptied into the root dir for this to run on Pydroid
 
 name: Sync Pydroid Branch
