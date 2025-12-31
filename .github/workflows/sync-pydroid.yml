@@ -1,0 +1,54 @@
+# This automatically takes commits to main and commits them to the Pydroid class
+# The contents of the 'app' directory need to be emptied into the root dir for this to run on Pydroid
+
+name: Sync Pydroid Branch
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Prepare workspace
+        run: |
+          # Remove everything except .git
+          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} \;
+
+          # Check out pydroid branch into the same working directory
+          git checkout pydroid
+
+          # Remove everything except .git again (clean pydroid)
+          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} \;
+
+          # Switch back to main to copy files
+          git checkout main -- .
+
+          # Move app/* into root
+          if [ -d "app" ]; then
+            mv app/* .
+            rm -rf app
+          fi
+
+      - name: Commit and push changes
+        run: |
+          git checkout -B pydroid
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Sync pydroid with main (flattened app directory)"
+          git push origin pydroid --force
