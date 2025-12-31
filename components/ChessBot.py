@@ -123,7 +123,7 @@ class ChessBot:
         return None
 
     def pick_best_db_move(self):
-        if self.db_manager is None:
+        if not self.db_manager.ping():
             return None
 
         move_to_play_str = None
@@ -183,7 +183,7 @@ class ChessBot:
     # instead of looking for a move that results in a good chance of winning, look for a move that puts opponent
     # in the position with the worst chance of success
     def pick_best_sabotage(self):
-        if self.db_manager is None:
+        if not self.db_manager.ping():
             return None
 
         test_board = deepcopy(self.board)

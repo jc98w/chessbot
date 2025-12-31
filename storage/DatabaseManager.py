@@ -1,17 +1,24 @@
-import sys
-from copy import deepcopy
-
+import threading
 from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
 from storage.BoardLog import BoardLog
 
 class DatabaseManager:
     def __init__(self):
-        uri = 'mongodb://localhost:27017/'
+        self.client = None
+        self.db = None
+        self.collection = None
 
-        self.client = MongoClient(uri)
-        self.db = self.client.chess
-        self.collection = self.db['bot_one_data']
+        threading.Thread(target=self.connect).start()
+
+    def connect(self):
+        """ Connect to MongoDB """
+        uri = 'mongodb://localhost:27017/'
+        try:
+            self.client = MongoClient(uri, serverSelectionTimeoutMS=1000)
+            self.db = self.client.chess
+            self.collection = self.db['bot_one_data']
+        except Exception as e:
+            print('Unable to connect to MongoDB:', e)
 
     def ping(self):
         try:
@@ -87,4 +94,3 @@ if __name__ == '__main__':
         print(db.read({'board':'rnbqkbnrpppppppp32PPPPPPPPRNBQKBNRKQkq'}))
     else:
         print('Failed to connect to MongoDB')
-

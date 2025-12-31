@@ -33,16 +33,7 @@ class GameManager:
         self.waiting_on_move = False
 
         # Attempt to connect to database
-        try:
-            print('Connecting to database...', end='')
-            self.db_manager = DatabaseManager()
-            if self.db_manager.ping():
-                print('Connection successful')
-            else:
-                raise Exception('Unable to connect to database')
-        except Exception as e:
-            print(e)
-            self.db_manager = None
+        self.db_manager = DatabaseManager()
 
         self.bot = ChessBot(self.db_manager)
 
@@ -179,7 +170,7 @@ class GameManager:
 
     def commit_log(self):
         # Commit log to database
-        if self.db_manager:
+        if self.db_manager.ping():
             try:
                 log_to_commit = deepcopy(self.board_log)
                 success = self.db_manager.commit_log(log_to_commit, self.winner)
