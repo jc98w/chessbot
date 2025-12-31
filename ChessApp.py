@@ -1,0 +1,104 @@
+import threading
+import tkinter as tk
+
+from components.GameManager import GameManager
+from gui_components.BoardCanvas import BoardCanvas2
+from gui_components.MenuFrame import MenuFrame
+from network.GameClient import GameClient
+from network.GameHoster import GameHoster
+
+BACKGROUND_GREEN = '#228833'
+BACKGROUND_WHITE = '#EEEEEE'
+DEFAULT_FONT = 'Arial, 20'
+
+class ChessApp(tk.Tk):
+
+    def __init__(self):
+        tk.Tk.__init__(self)
+        self.title("ChessBot")
+        self.geometry("500x500")
+        self.set_default_styles()
+
+        # Establish network and game managers
+        self.server_manager = GameHoster()
+        self.client_manager = GameClient()
+        self.game_manager = GameManager()
+
+        # Create frames for menu and game
+        self.current_frame = None
+        self.menu_frame = MenuFrame(self)
+        self.board_canvas = BoardCanvas2(self)
+        self.menu_frame['background'] = BACKGROUND_GREEN
+        self.board_canvas['background'] = BACKGROUND_GREEN
+
+    '''
+    * sets some default values for widget styles
+    '''
+    def set_default_styles(self):
+        self.option_add('*Background', BACKGROUND_WHITE)
+        self.option_add('*Font', DEFAULT_FONT)
+
+    '''
+    * Hides the current frame to open space for new frame
+    '''
+    def hide_current_frame(self):
+        if self.current_frame is not None:
+            self.current_frame.pack_forget()
+        self.current_frame = None
+
+    '''
+    * Switches view to start menu
+    '''
+    def show_start_menu(self):
+        self.hide_current_frame()
+        self.current_frame = self.menu_frame
+        self.menu_frame.pack(fill='both', expand=True, anchor='center')
+
+    '''
+    * Switches view to game board
+    '''
+    def start_game(self):
+        self.game_manager.reset()
+
+        # import settings from menu frame
+        white_player_status = self.menu_frame.get_player_status('white')
+        black_player_status = self.menu_frame.get_player_status('black')
+        self.board_canvas.set_player_types(white_player_status, black_player_status)
+        print(f'white: {white_player_status}, black:{black_player_status}')
+
+        # Set GameManager network_manager as server_manager or client_manager
+        if self.menu_frame.agent_type == 'host':
+            self.game_manager.set_network_manager(self.server_manager)
+        elif self.menu_frame.agent_type == 'client':
+            self.game_manager.set_network_manager(self.client_manager)
+        else:
+            self.game_manager.set_network_manager(None)
+            self.game_manager.lan_match = False
+
+        # Switch frame to board frame
+        self.hide_current_frame()
+        self.current_frame = self.board_canvas
+        self.board_canvas.pack(fill='both', expand=True)
+
+        print(self.game_manager)
+
+        self.board_canvas.start_game()
+
+    def close(self):
+        self.menu_frame.shutdown()
+        self.board_canvas.kill_game_thread()
+        self.server_manager.close_sockets()
+        self.client_manager.close_sockets()
+        self.destroy()
+
+
+if __name__ == '__main__':
+    root = ChessApp()
+    try:
+        root.show_start_menu()
+
+        root.protocol('WM_DELETE_WINDOW', root.close)
+        root.mainloop()
+    except KeyboardInterrupt:
+        print(threading.enumerate())
+        root.close()

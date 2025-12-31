@@ -462,7 +462,7 @@ class Board:
     # put board in terms of the player rather than by color
     # i.e. make whichever color is making move capitalized
     # flip board such that player's king is below and to the left of opponent's king
-    def normalized_board_str(self, color):
+    def normalized_board_str(self, color='white'):
         reference_board = self.get_board_array()
         normalized_board =  deepcopy(reference_board)
 
@@ -487,11 +487,15 @@ class Board:
                 normalized_board[row] = normalized_board[row][::-1]
 
         castling_rights = self.get_castling_rights(color).upper() + self.get_castling_rights(self.opposite_color(color))
-        return self.compressed_board_string(normalized_board) + castling_rights
+        return self.compress_board_str(normalized_board) + castling_rights
+
+    def create_board_str(self):
+        castling_rights = self.get_castling_rights('white').upper() + self.get_castling_rights('black')
+        return self.compress_board_str(self.board) + castling_rights
 
     # compress to a string for storage
     @staticmethod
-    def compressed_board_string(board_array):
+    def compress_board_str(board_array):
         comp_board = ''
 
         empty_space_count = 0
