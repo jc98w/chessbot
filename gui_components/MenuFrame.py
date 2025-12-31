@@ -1,6 +1,7 @@
 import threading
 import tkinter as tk
 from random import random
+from PIL import Image, ImageTk
 
 class MenuFrame(tk.Frame):
 
@@ -30,6 +31,11 @@ class MenuFrame(tk.Frame):
         self.white_player_status = 'player'
         self.black_player_status = 'bot'
 
+        white_king_src = Image.open('res/white_king.png')
+        black_king_src = Image.open('res/black_king.png')
+        self.white_king_image = ImageTk.PhotoImage(white_king_src)
+        self.black_king_image = ImageTk.PhotoImage(black_king_src)
+
         self.current_frame = None
         self.options_frame = self.prep_options_menu()
         self.lan_frame = self.prep_lan_frame()
@@ -44,9 +50,9 @@ class MenuFrame(tk.Frame):
         button_frame = tk.Frame(self, padx=50)
 
         # Make radiobuttons for selecting if black and white are players or bots
-        white_king_symbol = tk.Label(button_frame, text='♔')
+        white_king_symbol = tk.Label(button_frame, image=self.white_king_image)
         white_bot_checkbutton = tk.Checkbutton(button_frame, text='bot', variable=self.white_is_bot)
-        black_king_symbol = tk.Label(button_frame, text='♚')
+        black_king_symbol = tk.Label(button_frame, image=self.black_king_image)
         black_bot_checkbutton = tk.Checkbutton(button_frame, text='bot', variable=self.black_is_bot)
 
         # Buttons for entering game or setting up LAN multiplayer

@@ -1,7 +1,7 @@
 import queue
 import threading
 import tkinter as tk
-from time import sleep
+from PIL import Image, ImageTk
 
 from components.InfoBar import InfoBar
 
@@ -11,8 +11,13 @@ MIN_SIZE = 200
 BOARDER_WIDTH = 30
 FONT = 'Arial'
 
-PIECE_ICONS = {'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-               'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'}
+# PIECE_IMAGES = {'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+#                'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'}
+PIECE_IMAGES = {'K': 'white_king.png', 'Q': 'white_queen.png', 'R': 'white_rook.png', 'B': 'white_bishop.png', 'N': 'white_knight.png', 'P': 'white_pawn.png',
+               'k': 'black_king.png', 'q': 'black_queen.png', 'r': 'black_rook.png', 'b': 'black_bishop.png', 'n': 'black_knight.png', 'p': 'black_pawn.png'}
+# Prep piece images
+for icon in PIECE_IMAGES:
+    PIECE_IMAGES[icon] = Image.open(f'res/{PIECE_IMAGES[icon]}')
 
 class BoardCanvas2(tk.Canvas):
 
@@ -28,6 +33,7 @@ class BoardCanvas2(tk.Canvas):
         self.y_offset = 1
         self.icon_size = 1
         self.widgets = {}
+        self.image_cache = {}
 
         self.cell_selected = None
         self.bind("<Button-1>", self.on_left_click)
@@ -56,6 +62,11 @@ class BoardCanvas2(tk.Canvas):
         self.itemconfigure(self.info_window, width=self.width)
         self.info_bar.configure(width=self.width, height=self.y_offset)
 
+        # Resize piece images
+        for img in PIECE_IMAGES:
+            resized = PIECE_IMAGES[img].resize((self.cell_size, self.cell_size))
+            self.image_cache[img] = ImageTk.PhotoImage(resized)
+
     def on_left_click(self, event):
         """ Resolves left mouse clicks for selecting pieces to move """
         if self.game_manager.is_players_turn():
@@ -80,7 +91,7 @@ class BoardCanvas2(tk.Canvas):
                     move = [self.cell_selected[0], self.cell_selected[1], row, col]
 
                     if self.game_manager.need_promotion(move):
-                        move.append(self.ask_promotion_piece())
+                        move.append(self.ask_promotion_piece(self.game_manager.turn))
                     print(f'Adding {move} to move queue')
                     self.game_manager.add_player_move(move)
                     self.cell_selected = None
@@ -156,14 +167,13 @@ class BoardCanvas2(tk.Canvas):
                 if piece != '':
                     center_x = x1 + self.cell_size // 2
                     center_y = y1 + self.cell_size // 2
-                    piece_icon = PIECE_ICONS[piece]
 
                     if f'p{row}{col}' not in self.widgets:
                         # Piece on square and no piece draw -> draw new piece
-                        self.widgets[f'p{row}{col}'] = self.create_text(center_x, center_y, text=piece_icon, font=(FONT, self.icon_size), fill='black')
+                        self.widgets[f'p{row}{col}'] = self.create_image((center_x, center_y), image=self.image_cache[piece])
                     else:
                         # update drawn piece on that square
-                        self.itemconfig(self.widgets[f'p{row}{col}'], text=piece_icon, font=(FONT, self.icon_size))
+                        self.itemconfig(self.widgets[f'p{row}{col}'], image=self.image_cache[piece])
                         self.coords(self.widgets[f'p{row}{col}'], center_x, center_y)
                 else:
                     # No piece on the square - check for drawn piece and delete if necessary
@@ -200,7 +210,7 @@ class BoardCanvas2(tk.Canvas):
 
         for piece in pieces:
             piece = piece.upper() if color == 'white' else piece
-            tk.Button(button_frame, text=PIECE_ICONS[piece], font=(FONT, int(self.icon_size * 0.75)), command=lambda p=piece: on_select(p))\
+            tk.Button(button_frame, image=self.image_cache[piece], command=lambda p=piece: on_select(p))\
                 .pack(side='left', padx=10, pady=10)
 
         x, y = self.winfo_width() // 2, self.winfo_height() // 2
