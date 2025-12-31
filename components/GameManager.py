@@ -35,9 +35,7 @@ class GameManager:
         # Attempt to connect to database
         try:
             print('Connecting to database...', end='')
-            if len(sys.argv) < 2:
-                raise Exception('Database credentials not provided')
-            self.db_manager = DatabaseManager(sys.argv[1], sys.argv[2])
+            self.db_manager = DatabaseManager()
             if self.db_manager.ping():
                 print('Connection successful')
             else:
