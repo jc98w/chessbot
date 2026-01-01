@@ -58,7 +58,7 @@ class BoardCanvas2(tk.Canvas):
         self.icon_size = int(self.cell_size * 0.7)
 
         self.coords(self.info_window, (self.width // 2, self.height))
-        self.info_bar.set_font_size(self.icon_size // 4)
+        self.info_bar.set_font_size(-(self.icon_size // 4))
         self.itemconfigure(self.info_window, width=self.width)
         self.info_bar.configure(width=self.width, height=self.y_offset)
 
@@ -108,7 +108,7 @@ class BoardCanvas2(tk.Canvas):
         if self.width < 50 or self.height < 50:
             return
 
-        label_size = int(self.cell_size * 0.15)
+        label_size = -int(self.cell_size * 0.15)
 
         # Identify highlighted squares
         selected_row, selected_col, valid_squares_list = None, None, []
@@ -236,7 +236,8 @@ class BoardCanvas2(tk.Canvas):
                     message = 'Draw!'
                 case _:
                     message = f'{winner.capitalize()} wins!'
-            msg_lbl = tk.Label(dialog, text=message, font=(FONT, int(self.icon_size * 0.75)))
+            
+            msg_lbl = tk.Label(dialog, text=message, font=(FONT, -int(self.icon_size * 0.75)))
             msg_lbl.pack(pady=10)
 
             def close_dialog():
@@ -250,8 +251,8 @@ class BoardCanvas2(tk.Canvas):
                 self.parent.show_start_menu()
 
             if winner != 'disconnect':
-                tk.Button(dialog, text='Reset', command=close_dialog, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
-            tk.Button(dialog, text='Menu', command=nav_to_menu, font=(FONT, int(self.icon_size * 0.5))).pack(pady=10)
+                tk.Button(dialog, text='Reset', command=close_dialog, font=(FONT, -int(self.icon_size * 0.5))).pack(pady=10)
+            tk.Button(dialog, text='Menu', command=nav_to_menu, font=(FONT, -int(self.icon_size * 0.5))).pack(pady=10)
 
             # position frame in middle of window
             x, y = self.winfo_width() // 2, self.winfo_height() // 2
