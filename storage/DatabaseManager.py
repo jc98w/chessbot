@@ -25,7 +25,7 @@ class DatabaseManager:
             self.client.admin.command('ping')
             return True
         except Exception as e:
-            print(e)
+            print('Unable to ping MongoDB')
             return False
 
     def create(self, data):
