@@ -3,7 +3,7 @@ import threading
 import tkinter as tk
 from PIL import Image, ImageTk
 
-from components.InfoBar import InfoBar
+from gui_components.InfoBar import InfoBar
 
 LIGHT_SQUARE_COLOR = '#DEB887'
 DARK_SQUARE_COLOR = '#8B4513'
