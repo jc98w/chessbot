@@ -48,8 +48,8 @@ class BoardCanvas2(tk.Canvas):
     def on_resize(self, event):
         """ Adjusts sizes when window resizes """
         self.update()
-        self.height = event.height
-        self.width = event.width
+        self.height = self.winfo_height()
+        self.width = self.winfo_width()
 
         size = max(MIN_SIZE, min(self.width, self.height)) - BOARDER_WIDTH * 2
         self.x_offset = BOARDER_WIDTH if self.width < self.height or size < MIN_SIZE else BOARDER_WIDTH + (self.width - self.height) // 2
