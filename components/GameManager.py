@@ -34,8 +34,10 @@ class GameManager:
 
         # Attempt to connect to database
         self.db_manager = DatabaseManager()
+        self.commit_thread = None
 
         self.bot = ChessBot(self.db_manager)
+        self.bot_delay = 1
 
     def set_player_types(self, white_type = 'player', black_type = 'bot'):
         """ Type should be player, bot, or lan_opp (LAN opponent) """
@@ -157,7 +159,8 @@ class GameManager:
                         self.network_manager.send_data('game over')
                     print(f'Winner: {self.winner}')
         # Commit log in background
-        threading.Thread(target=self.commit_log, daemon=True).start()
+        self.commit_thread = threading.Thread(target=self.commit_log, daemon=True)
+        self.commit_thread.start()
 
         return self.winner
 
@@ -171,6 +174,7 @@ class GameManager:
     def commit_log(self):
         # Commit log to database
         if self.db_manager.ping():
+            print('Background thread: Committing log to database...')
             try:
                 log_to_commit = deepcopy(self.board_log)
                 success = self.db_manager.commit_log(log_to_commit, self.winner)
@@ -265,7 +269,8 @@ class GameManager:
 
     def bot_move(self, color):
         """ Returns bot generated move """
-        sleep(1)
+        if self.bot_delay > 0:
+            sleep(self.bot_delay)
         while True:
             move = self.bot.decide_move(self.board, color)
             if self.board.move_piece(*move):

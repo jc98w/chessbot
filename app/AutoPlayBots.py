@@ -1,45 +1,26 @@
-import sys
-from copy import deepcopy
-from pprint import pprint
-
-from components.Board import Board
+from components.GameManager import GameManager
 from components.ChessBot import ChessBot
 from storage.DatabaseManager import DatabaseManager
-from storage.BoardLog import BoardLog
 
 if __name__ == '__main__':
-    try:
-        print('Connecting to database...', end='')
-        db_manager = DatabaseManager()
-        if db_manager.ping():
-            print('Connection successful')
-        else:
-            raise Exception('Unable to connect to database')
-    except Exception as e:
-        print(e)
-        db_manager = None
-
+    db_manager = DatabaseManager()
     bot = ChessBot(db_manager)
 
-    x = 'y'
-    while x == 'y':
-        turn = 'white'
-        board_log = BoardLog()
-        board = Board()
+    game_manager = GameManager()
+    game_manager.set_player_types('bot', 'bot')
+    game_manager.bot_delay = 0
+
+    games_played = 0
+
+    try:
         while True:
-            move = bot.decide_move(board, turn)
-            board_log.add_entry(deepcopy(board), *move)
-            board.move_piece(*move)
-            turn = board.opposite_color(turn)
-            if board.in_checkmate(turn):
-                print(f'Checkmate!')
-                break
-            if board.is_stalemate(turn):
-                print(f'Stalemate!')
-                break
-        for log in board_log.get_log():
-            pprint(log.get_board_array())
-        x = input('Play again? (y/n)')
-
-
+            print('Starting a new game between bots...')
+            game_manager.game_loop()
+            game_manager.commit_thread.join()
+            games_played += 1
+            print('Game ended.\n')
+            game_manager.reset()
+    except KeyboardInterrupt:
+        print(f'\nGames played: {games_played}')
+        print('Exiting...')
 
