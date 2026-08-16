@@ -12,11 +12,11 @@ from components.Board import Board
 
 # format of traditional chess moves (e6, qxh1, ...)
 MOVE_FORMAT = re.compile(r"""
-    ^(?P<piece>[rbnkq])?
+    ^(?P<piece>[RBNKQ])?
     (?P<from>[a-h1-8])?
     (?P<x>x)?
     (?P<dest>[a-h][1-8])
-    (?P<promotion>[rbkq])?$
+    (?P<promotion>[RBNQ])?$
 """, re.VERBOSE)
 
 def convert_square(square: str):
@@ -34,7 +34,6 @@ def convert_square(square: str):
 def convert_move(board, trad_move, color):
     """ Converts from traditional form (e4, kxe6) to program's format [2, 3, 3, 3]
         This method does not necessarily care if the move is valid """
-    trad_move = trad_move.lower()
     match_move = MOVE_FORMAT.match(trad_move)
     if not match_move:
         # Check for castling / invalid moves
@@ -56,8 +55,10 @@ def convert_move(board, trad_move, color):
         print(f'{group}: {match_move.group(group)}')
 
     piece = match_move.group('piece')
-    if piece and color == 'white':
+    if piece and (color == 'white'):
         piece = piece.upper()
+    elif piece and (color == 'black'):
+        piece = piece.lower()
     from_loc = match_move.group('from')
     dest = match_move.group('dest')
     from_row, from_col = convert_square(from_loc)   # Will often be None, None
@@ -108,21 +109,25 @@ class BookMoveManager:
         board = Board()
         moves = line.split()
         color = 'white'
+        moves_to_insert = []
         for trad_move in moves:
             move = convert_move(board, trad_move, color)
             color = 'black' if color == 'white' else 'white'
             board_str = board.create_board_str()
+            moves_to_insert.append((board_str, trad_move))
             if not board.move_piece(*move):
                 print(f'Line not added due to invalid move: {trad_move}')
                 return
+
+        for move in moves_to_insert:
             # Add move to existing entry if it is not present
-            params = {'id': board_str, 'move': trad_move, '_move': ' ' + trad_move}
+            params = {'id': move[0], 'move': move[1], '_move': ' ' + move[1]}
             self._cursor.execute("""INSERT INTO book VALUES (:id, :move)
                                     ON CONFLICT(board_id)
                                     DO UPDATE SET moves = moves || :_move
                                     WHERE INSTR(moves, :move) = 0"""
                                     ,params)
-            print(f'Entry {board_str} updated')
+            print(f'Entry {move[0]} updated')
         self._book.commit()
 
     def get_moves(self, board_str):
@@ -132,3 +137,18 @@ class BookMoveManager:
             return self._cursor.fetchone()[0].split()
         except TypeError:
             return None
+
+if __name__ == '__main__':
+    book_move_manager = BookMoveManager()
+    book_move_manager.connect()
+
+    while True:
+        line = input('Line: ')
+        if line == 'q':
+            break
+        else:
+            try:
+                book_move_manager.add_line(line)
+            except Exception as e:
+                print('line failed')
+    print('Finished')
